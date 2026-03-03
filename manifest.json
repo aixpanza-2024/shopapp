@@ -1,0 +1,25 @@
+{
+  "name": "Qalb Chai POS",
+  "short_name": "QalbPOS",
+  "description": "Point of Sale system for Qalb Chai",
+  "start_url": "/shopapp/Layout/master_bill.php",
+  "scope": "/shopapp/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#b8860b",
+  "icons": [
+    {
+      "src": "/shopapp/images/logo_small.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/shopapp/images/logo_small.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

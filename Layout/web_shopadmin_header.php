@@ -8,13 +8,18 @@ include_once("../db.php");
 <!doctype html>
 <html lang="en">
     <head>
-        <title>Title</title>
+        <title>Qalb Chai POS</title>
         <!-- Required meta tags -->
         <meta charset="utf-8" />
-        <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1.0, shrink-to-fit=no"
-        />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no" />
+
+        <!-- PWA -->
+        <link rel="manifest" href="/shopapp/manifest.json">
+        <meta name="theme-color" content="#b8860b">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="QalbPOS">
+        <link rel="apple-touch-icon" href="/shopapp/images/logo_small.png">
 
         <!-- Bootstrap CSS v5.2.1 -->
         <link
@@ -43,6 +48,11 @@ include_once("../db.php");
     </head>
 
     <body style="top:0px !important;">
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/shopapp/sw.js');
+      }
+    </script>
         <header>
        
             <!-- place navbar here -->
