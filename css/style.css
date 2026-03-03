@@ -1,0 +1,575 @@
+
+
+.active-box {
+  border: 2px solid #fcfcfc;
+  border-radius: 8px;
+}
+
+
+.atag{
+  text-decoration: none !important;
+}
+
+.body{
+   
+    background-color: white;
+    font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+    top: 0px !important; 
+}
+
+
+
+.box {
+  
+  margin: -1px;
+  background-color: white;
+  display: inline-block;
+  text-align: center;
+  line-height: 100px;
+  font-size: 20px;
+  border-radius: 5PX;
+  border-color: #d5d5d5;
+  border-style: solid;
+  border-width: 1px;
+}
+
+.cat-img{
+   width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 2px solid #ccc;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    background-color: #ffdfa0; /* Light beige background to match Qalb Chai theme */
+    padding: 5px;
+}
+
+
+.cardpad{
+  padding: 0px !important;
+}
+
+
+
+.row{
+    margin: 0;
+}
+
+.btn-chai{
+    border-style: solid !important;
+    border-width: 1px !important;
+    border-color: #996515 !important;
+    border-radius: 5px !important;
+    
+}
+
+.btn-chai-menu{
+    border-style: solid !important;
+    border-width: 1px !important;
+    border-color: #996515 !important;
+    border-radius: 22px !important;
+    background-color: whitesmoke;
+    width: 100%;
+}
+.btn-chai-menu:hover,.btn-chai-menu:active{
+background-color: #996515;
+color:white;
+
+}
+
+ 
+.bill-card-name{
+    font-weight: bold;
+    text-align: right;
+    color: grey;
+    
+
+
+}
+
+.bill-card-recent{
+    font-weight: bold;
+    text-align: left;
+    color: black;
+
+
+}
+
+
+.card-products{
+  margin-top: 10px;
+}
+
+
+.card-body{
+  font-weight: bold;
+  font-size: 16px;
+  text-align: center;
+}
+
+
+
+.card-img-top{
+  width:50%;
+  height:50%;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: #f9f9f9;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 1;
+  max-width: 100%;
+  overflow-y: auto;
+  overflow-x: auto;
+  white-space: nowrap;
+  border: 1px solid #ccc;
+}
+
+.dropdown-content a {
+  color: black;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+}
+
+.dropdown-content a:hover {
+  background-color: #f1f1f1;
+}
+
+/* .d-flex {
+    height: 100vh;
+  } */
+  
+
+  .goog-te-gadget-simple
+  {
+
+    padding: 0.5rem 0;
+  margin: 0.125rem 0 0;
+  font-size: 1rem;
+  color: #aaa;
+  text-align: left;
+  background-color: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 0.25rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.175);
+  }
+
+
+  /* Hide the "Rate this translation" popup */
+.goog-te-banner-frame, .goog-te-balloon-frame {
+  display: none !important;
+}
+
+/* Hide the feedback option on hover */
+.goog-te-gadget-icon {
+  display: none !important;
+}
+
+
+  .nav-link {
+    color: #fff;
+  }
+  
+  .nav-link.active {
+    color: #007bff;
+  }
+  
+
+
+  
+  
+.headercolor{
+    background-color: #b8860b !important;
+    color: white;
+    padding: 10px;
+    font-weight: bold;
+    font-size: 20px;
+    text-align: center;
+     border-bottom-left-radius: 2%;
+    border-bottom-right-radius: 2%;
+    box-shadow: 0 1px 16px rgba(0, 0, 0,0.6);
+    margin-bottom :20px;
+    /* for sticky */
+     position: sticky;
+  top: 0; /* Sticks to the top */
+  z-index: 999; /* Ensures it's above other elements */
+}
+
+
+.hrline{
+
+    border-top: 1px solid #000;
+}
+
+
+.hamberger-bill{
+    display: block;
+}
+
+
+
+.inactive-box {
+  background-color: white;
+}
+
+
+/* Hide Google Translate top banner */
+.goog-te-banner-frame.skiptranslate {
+    display: none !important;
+}  
+
+/* Remove extra body margin/padding added by the banner */
+body {
+    top: 0px !important;
+}
+
+
+
+.login-div{
+    background-color: whitesmoke;
+    padding: 10px;
+    border-style: solid;
+    border-width: 1px;
+    border-color: grey;
+    border-radius: 2%;
+    box-shadow: rgb(235, 175, 135);
+    
+}
+
+.login-head{
+font-size:larger;
+font-weight: bolder;
+color: black;
+text-align: center;
+}
+
+
+.login-align{
+    margin-top: 10%;
+}
+
+.login-image{
+    border-radius: 50px;
+    width: 200px;
+
+}
+
+
+
+.main-prod{
+    height: 100vh;
+    max-height: 600px; /* Set a max height for the scrollable div */
+    overflow-y: auto;
+}
+
+.mobile-footer{
+    border-top-style: solid;
+  border-top-color: gray;
+  border-top-width: 1px;
+}
+
+
+.nav-bais{
+    background-color: #996515;
+    color: white;
+    
+}
+
+.nav-let-pad{
+    margin-left: 10px;
+}
+
+
+.points{
+font-size: 12px;
+  color: gray;
+}
+
+.prodname{
+
+  font-size:16px ;
+  font-weight: bold;
+  text-align: left;
+
+}
+
+
+.product-card {
+  border-radius: 8px;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 280px; 
+}
+
+
+.product-card .card-body {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.product-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+
+.product-card img {
+  height: 180px;
+  object-fit: contain;
+  width: auto;
+  max-width: 100%;
+}
+
+.product-card .card-img-top {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #fff; /* optional: nice background for empty space */
+}
+
+.product-title {
+  font-weight: 600;
+  text-transform: capitalize;
+   min-height: 40px; /* reserve space for 2 lines of text */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.product-price {
+  color: #b8860b;
+  font-weight: 500;
+    font-size: 14px;
+}
+
+
+/* + and - button code  */
+
+.qty-input {
+  width: 50px;
+  text-align: center;
+}
+
+.btn-qty {
+  border: 1px solid #ddd;
+  background: #f9f9f9;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.btn-qty:hover {
+  background: #eee;
+}
+
+.search-container {
+  position: relative;
+  display: inline-block;
+}
+
+.searchInput {
+  padding: 10px;
+  width: 100%;
+  font-size: 16px;
+  border: 1px solid #ddd;
+}
+
+.show {
+  display: block;
+}
+
+
+.sidenav {
+  height: 100%;
+  width: 0;
+  position: fixed;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  background-color: #111;
+  overflow-x: hidden;
+  transition: 0.5s;
+  padding-top: 60px;
+}
+
+.sidenav a {
+  padding: 8px 8px 8px 32px;
+  text-decoration: none;
+  font-size: 25px;
+  color: #818181;
+  display: block;
+  transition: 0.3s;
+}
+
+.sidenav a:hover {
+  color: #f1f1f1;
+}
+
+.sidenav .closebtn {
+  position: absolute;
+  top: 0;
+  right: 25px;
+  font-size: 36px;
+  margin-left: 50px;
+}
+
+
+.verticalline{
+    
+    border-left: 1px solid #996515; /* Adjust color as needed */
+    height: 100vh; /* Adjust height as needed */
+   /*  margin-left: 20px; Adjust margin as needed */
+}
+
+/* hidding the top bar showing translation */
+.VIpgJd-ZVi9od-ORHb-OEVmcd
+{
+  display:none;
+  /* margin-top: -40px; */
+}
+
+/* hiding the suggestion box */
+
+.VIpgJd-yAWNEb-L7lbkb
+{
+  display: none !important;
+}
+
+
+/*@media*/
+@media (max-width: 767px){
+
+
+
+
+    .btn-chai-menu{
+        border-style: solid !important;
+        border-width: 1px !important;
+        border-color: #996515 !important;
+        border-radius: 9px !important;
+        background-color: whitesmoke;
+        width: 100%;
+        margin-top: 0px !important;
+        height: 3.0em; /* You can adjust this value to control the number of lines */
+      white-space: nowrap;
+      overflow: hidden;
+      padding: 0px !important;
+     
+    }
+
+
+    .card-body{
+  padding-top: 0px !important;
+ }
+    
+
+    .dropdown-content {
+      
+      position: absolute;
+      background-color: #f9f9f9;
+      box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+      z-index: 9;
+      max-width: 100%;
+      overflow-y: auto;
+      overflow-x: auto;
+      white-space: nowrap;
+      top:0;
+      border: 1px solid #ccc;
+    }
+
+    
+
+
+    .hamberger-bill{
+        display: block;
+    }
+
+    .main-prod{
+        height: 100vh;
+        max-height: 1000px; /* Set a max height for the scrollable div */
+        overflow-y: auto;
+    }
+.product-card {
+  
+  height: 200px; 
+}
+
+    .product-card .card-body{
+  border-radius: 8px;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: start;
+  height: 180px; 
+}
+
+    .product-card img {
+  height: 100px;
+  object-fit: contain;
+  width: auto;
+  max-width: 100%;
+}
+
+.product-title {
+  font-weight: 600;
+  text-transform: capitalize;
+  font-size: 16px;
+}
+
+
+    .sidenav {
+        height: 100%;
+        width: 0;
+        position: fixed;
+        z-index: 1;
+        top: 0;
+        left: 0;
+        background-color: #111;
+        overflow-x: hidden;
+        transition: 0.5s;
+        padding-top: 60px;
+      }
+      
+      .sidenav a {
+        padding: 8px 8px 8px 32px;
+        text-decoration: none;
+        font-size: 25px;
+        color: #818181;
+        display: block;
+        transition: 0.3s;
+      }
+      
+      .sidenav a:hover {
+        color: #f1f1f1;
+      }
+      
+      .sidenav .closebtn {
+        position: absolute;
+        top: 0;
+        right: 25px;
+        font-size: 36px;
+        margin-left: 50px;
+      }
+
+
+    .verticalline{
+    
+        border-left: 1px solid #996515; /* Adjust color as needed */
+        height: 0vh; /* Adjust height as needed */
+       /*  margin-left: 20px; Adjust margin as needed */
+    }
+
+    
+    
+}
+
+

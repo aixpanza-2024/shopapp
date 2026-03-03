@@ -1,0 +1,42 @@
+/* General text containers */
+.translated-text,
+body,
+p,
+span,
+div,
+h1, h2, h3, h4, h5, h6 {
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+/* Make buttons and navbar items wrap nicely */
+/* button, .btn, .nav-link, .dropdown-item {
+  white-space: normal !important;
+  word-break: break-word !important;
+  line-height: 1.2;
+} */
+
+/* Forms & labels */
+label, input, textarea, select {
+  max-width: 100%;
+}
+
+/* Flex containers should allow wrapping */
+/* .d-flex, .flex-row, .flex-column {
+  flex-wrap: wrap !important;
+} */
+
+/* Reduce font size for languages with longer words (Malayalam, Tamil, etc.) */
+html[lang="ml"],
+html[lang="ta"],
+html[lang="hi"] {
+  font-size: 0.92em;
+}
+
+/* Optional: Give some breathing space */
+.translated-text,
+.nav-link,
+.btn {
+  padding: 0.25rem 0.5rem;
+}

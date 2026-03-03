@@ -1,0 +1,18 @@
+# DB credentials
+db.php
+
+# Claude session data
+.claude/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# PHP logs
+*.log
+error_log
+
+# Uploads / temp
+uploads/tmp/
