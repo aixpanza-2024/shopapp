@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/qalbchai/public_html/shopapp
+    - /bin/cp -R * $DEPLOYPATH
