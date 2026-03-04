@@ -388,10 +388,10 @@ function newbill(type = 'normal', paymentMode = 'cash', staffName = '') {
 
     receipt += "AI-Powered Smart Billing &\n Web Applications \nwww.aixpanza.com || 9020203686";
 
-    // Print via RawBT
-    var rawbtURL = 'intent:' + encodeURIComponent(receipt) +
-               '#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;';
-    window.location.href = rawbtURL;
+    // Print via RawBT (temporarily disabled)
+    // var rawbtURL = 'intent:' + encodeURIComponent(receipt) +
+    //            '#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;';
+    // window.location.href = rawbtURL;
 
     // 💾 Update DB (status + payment mode)
     let statusType = (type === 'debt') ? 'Debt' : 'Paid';
