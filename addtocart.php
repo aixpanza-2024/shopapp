@@ -167,24 +167,20 @@ if (isset($_SESSION['invno'])) {
 else
 {
 
-// Step 1: Fetch or initialize counter for this shop and year
-$select_stmt = $conn->prepare("SELECT invno FROM income_invoice  WHERE sh_id = ? AND Year = ? order by inv_id DESC limit 1");
-$select_stmt->bind_param("ii", $shopid, $year);
+// Step 1: Fetch next invno from MAX of both tables to prevent ghost invno collisions
+$select_stmt = $conn->prepare("
+    SELECT COALESCE(MAX(inv), 0) + 1 AS next_invno
+    FROM (
+        SELECT invno AS inv FROM income_invoice WHERE sh_id = ? AND Year = ?
+        UNION ALL
+        SELECT `Inv no` AS inv FROM daily_productsale WHERE sh_id = ? AND Year = ?
+    ) AS all_invoices
+");
+$select_stmt->bind_param("iiii", $shopid, $year, $shopid, $year);
 $select_stmt->execute();
-$select_stmt->bind_result($invno);
-$exists = $select_stmt->fetch();
+$row = $select_stmt->get_result()->fetch_assoc();
+$invno = $row['next_invno'];
 $select_stmt->close();
-
-if ($exists) {
-    $new_invoice_no = $invno + 1;
-    $invno = $new_invoice_no;
-}
-else
-{
-$new_invoice_no = 1;
-$invno = $new_invoice_no;
-
-}
 $_SESSION['invno'] = $invno;
 
 }
