@@ -2,8 +2,6 @@
             <!-- place footer here -->
         </footer>
         <!-- Bootstrap JavaScript Libraries -->
-        <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
-        <!-- Add this in the <head> section or just before your <script> tags -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
 <?php
