@@ -9,7 +9,7 @@
   <a href="../Adminpanel/index.php">Expense</a>
   <a href="#">Profile</a>
   <a href="../Adminpanel/index.php">Adminpanel</a>
-  <a href="#">Logout</a>
+  <a href="../logout.php">Logout</a>
 </div>
 <span style="font-size:30px;cursor:pointer" class="hamberger-bill" onclick="openNav()">&#9776;</span>
 
