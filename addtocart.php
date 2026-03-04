@@ -1,5 +1,7 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) {
+    ini_set('session.gc_maxlifetime', 315360000); // 10 years
+    session_set_cookie_params(315360000);
     session_start();
 }
 

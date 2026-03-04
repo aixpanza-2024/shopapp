@@ -1,4 +1,6 @@
 <?php
+ini_set('session.gc_maxlifetime', 315360000); // 10 years
+session_set_cookie_params(315360000);
 session_start();
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
