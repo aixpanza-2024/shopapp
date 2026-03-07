@@ -320,6 +320,36 @@ else
 </div>
 
 <script>
+function showBillToast(message, success) {
+    var existing = document.getElementById('billToast');
+    if (existing) existing.remove();
+
+    var toast = document.createElement('div');
+    toast.id = 'billToast';
+    toast.textContent = message;
+    toast.style.cssText = [
+        'position:fixed',
+        'top:20px',
+        'left:50%',
+        'transform:translateX(-50%)',
+        'z-index:9999',
+        'padding:14px 28px',
+        'border-radius:8px',
+        'font-size:1rem',
+        'font-weight:bold',
+        'color:#fff',
+        'box-shadow:0 4px 16px rgba(0,0,0,0.25)',
+        'transition:opacity 0.4s ease',
+        'background:' + (success ? '#198754' : '#dc3545')
+    ].join(';');
+
+    document.body.appendChild(toast);
+    setTimeout(function() {
+        toast.style.opacity = '0';
+        setTimeout(function() { toast.remove(); }, 400);
+    }, 2500);
+}
+
 function showStaffPicker() {
     document.getElementById('payView1').style.display = 'none';
     document.getElementById('payView2').style.display = 'block';
@@ -406,9 +436,18 @@ function newbill(type = 'normal', paymentMode = 'cash', staffName = '') {
     fetch('../updatebilling_status.php', {
         method: 'POST',
         body: formData
-    }).then(response => response.text())
-      .then(data => console.log('Status updated:', data))
-      .catch(err => console.error(err));
+    }).then(response => {
+        if (response.ok) {
+            showBillToast('Successfully billed!', true);
+        } else {
+            showBillToast('Billing failed. Please try again.', false);
+        }
+        return response.text();
+    }).then(data => console.log('Status updated:', data))
+      .catch(err => {
+        console.error(err);
+        showBillToast('Billing failed. Please try again.', false);
+    });
 
     // Reset session after a short delay
     setTimeout(() => {

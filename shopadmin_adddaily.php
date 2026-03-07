@@ -1,180 +1,140 @@
-<!-- code for displaying products based on category -->
+<!-- products grouped by category -->
 <?php
 include_once("db.php");
 
-$proddisplay = "SELECT * FROM `products` WHERE categorie='2' OR categorie='8'";
-$resultproddisply = mysqli_query($conn, $proddisplay);
-$countingprod = mysqli_num_rows($resultproddisply);
+// Fetch all categories that have at least one product
+$catresult = mysqli_query($conn,
+    "SELECT c.cat_id, c.categorie
+     FROM categorie c
+     INNER JOIN products p ON p.categorie = c.cat_id
+     GROUP BY c.cat_id, c.categorie
+     ORDER BY c.categorie ASC"
+);
 ?>
-</div>
 
-<div class="row">
-  <div class="col-10">
-    <h2 class="text-center">Products</h2>
-<div id="printresult" style="background-color:cream;color:green"></div>
+<div class="row g-0">
 
-<table class="table table-bordered table-striped justify-content-center">
-  <thead>
-    <tr>
-      <th>Choose</th>
-      <th>Product Name</th>
-     <th>Choose</th>
-      <th>Product Name</th>
-      <th>Choose</th>
-      <th>Product Name</th>
-    </tr>
-  </thead>
-  <tbody>
+  <!-- Products Column -->
+  <div class="col-12 col-md-10">
+
+    <div class="d-flex justify-content-between align-items-center px-2 mb-3">
+      <h5 class="mb-0 fw-bold">Products</h5>
+      <a href="shopadmin_addproduct.php" class="btn btn-sm btn-warning">
+        <i class="fa fa-plus"></i> Add Product
+      </a>
+    </div>
+
+    <div id="printresult" class="px-2 mb-2" style="color:green;"></div>
+
     <?php
-    if ($countingprod == 0) {
-        echo "<tr><td colspan='4' class='text-center'>No Products Found</td></tr>";
+    if (!$catresult || mysqli_num_rows($catresult) == 0) {
+        echo '<p class="text-center text-muted py-4">No products found.</p>';
     } else {
-        $counter = 0;
-    while ($displayprodrow = mysqli_fetch_array($resultproddisply)) {
-            if ($counter % 3 == 0) {
-                echo "<tr>"; // open a new row every 3 products
-            }
-            ?>
-            <td>
-              <input type="checkbox" class="form-check-input prod-check dataenter" 
-                id="prod<?php echo $displayprodrow['p_id'];?>" 
-                data-id="<?php echo $displayprodrow['p_id']; ?>">
-              
-            </td>
-            <td>
-              <?php echo htmlspecialchars($displayprodrow['name']); ?>
-              <input type="text" class="form-control prod-input dataenter" id="prod<?php echo $displayprodrow['p_id'];?>" data-id="<?php echo $displayprodrow['p_id']; ?>" value="10" disabled>
-           <input type="hidden" 
-       class="form-control prod-name dataenter" 
-       id="prod<?php echo $displayprodrow['p_id'];?>"
-       data-id="<?php echo $displayprodrow['p_id']; ?>" 
-       value="<?php echo $displayprodrow['name']; ?>" 
-       disabled>
-            </td>
-            <?php
-            if ($counter % 3 == 2) {
-                echo "</tr>"; // close row after 3 products
-            }
-            $counter++;
-        }
+        while ($catrow = mysqli_fetch_assoc($catresult)) {
+            $catid   = intval($catrow['cat_id']);
+            $catname = htmlspecialchars($catrow['categorie']);
 
-        // If total products not multiple of 3 → fill empty cells
-        $remaining = $counter % 3;
-        if ($remaining != 0) {
-            $emptyCells = (3 - $remaining) * 2; // 2 <td> per product
-            echo str_repeat("<td></td>", $emptyCells) . "</tr>";
+            $prodresult = mysqli_query($conn,
+                "SELECT * FROM products WHERE categorie = '$catid' ORDER BY name ASC"
+            );
+            if (!$prodresult || mysqli_num_rows($prodresult) == 0) continue;
+            ?>
+
+            <div class="category-section mb-4 px-2">
+              <div class="category-header mb-2">
+                <span class="cat-badge"><?php echo $catname; ?></span>
+                <hr class="cat-divider">
+              </div>
+              <div class="row g-2">
+                <?php while ($prod = mysqli_fetch_assoc($prodresult)) { ?>
+                <div class="col-6 col-sm-4 col-lg-3">
+                  <div class="prod-card">
+                    <div class="form-check mb-1">
+                      <input type="checkbox"
+                             class="form-check-input prod-check dataenter"
+                             id="chk<?php echo $prod['p_id']; ?>"
+                             data-id="<?php echo $prod['p_id']; ?>">
+                      <label class="form-check-label prod-label" for="chk<?php echo $prod['p_id']; ?>">
+                        <?php echo htmlspecialchars($prod['name']); ?>
+                      </label>
+                    </div>
+                    <input type="number"
+                           class="form-control form-control-sm prod-input dataenter"
+                           id="prod<?php echo $prod['p_id']; ?>"
+                           data-id="<?php echo $prod['p_id']; ?>"
+                           value="10" disabled>
+                    <input type="hidden"
+                           class="prod-name dataenter"
+                           data-id="<?php echo $prod['p_id']; ?>"
+                           value="<?php echo htmlspecialchars($prod['name']); ?>"
+                           disabled>
+                  </div>
+                </div>
+                <?php } ?>
+              </div>
+            </div>
+
+            <?php
         }
     }
     ?>
-  </tbody>
-</table>
+  </div>
+
+  <!-- Today's Products Sidebar -->
+  <div class="col-12 col-md-2">
+    <div class="todays-panel">
+      <h6 class="text-center fw-bold mb-2">Today's Products</h6>
+      <div class="todayprods"></div>
+    </div>
+  </div>
 
 </div>
-<div class="col-2">
-    <h2 class="text-center">Todays Products</h2>
-    <div class="todayprods">
-      </div>
-</div>
-</div>
-
-
-<!-- code for displaying the product ends here -->
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
-// $(document).on('change', '.prod-check', function() {
-//     let prodId = $(this).data('id');
-//     let inputBox = $('.prod-input[data-id="' + prodId + '"]');
-
-//     if ($(this).is(':checked')) {
-//         inputBox.prop('disabled', false);
-//     } else {
-//         inputBox.prop('disabled', true);
-//         inputBox.val(''); // clear if you want
-//     }
-// });
-
 $(document).ready(function() {
     todaysdata();
 });
 
+$(document).on('change', '.dataenter', function() {
+    let prodId = $(this).data('id');
+    let insert = $('.dataenter[data-id="' + prodId + '"]').not(':checkbox');
+    let value  = insert.val();
+    let name   = $('.prod-name[data-id="' + prodId + '"]').val();
 
-$(document).on('change', '.dataenter', function() { 
-  let prodId = $(this).data('id'); // from checkbox
-    let insert = $('.dataenter[data-id="' + prodId + '"]').not(':checkbox'); 
-    let value = insert.val(); // textbox value
-    let name = $('.prod-name[data-id="' + prodId + '"]').val(); // get product name
-
-    // alert("ProdId = " + prodId + " , Value = " + value + " , Name = " + name); 
     if ($(this).is(':checked')) {
         insert.prop('disabled', false);
     } else {
-         if (insert.prop('disabled')) {
-        insert.prop('disabled', true);
-    } else {
-        // do nothing → keep it enabled
-    }
-        // inputBox.val(''); // clear if you want
-    }
-
-       // AJAX call using jQuery
-     $.ajax({
-    url: '../ajaxreqshopadmin.php',
-    type: 'GET',
-    data: { 
-        prodId: prodId, 
-        prodvalue: value,   // second value
-        prodname:name // get product name
-    },
-    success: function(response) {
-        console.log("success");
-        $('#printresult').html(response);
-
-       todaysdata();
-
-    },
-        error: function(error) {
-          console.error('Error Status: ' + status); // e.g. 'error'
-        console.error('Error Thrown: ' + error);  // e.g. the actual error message
-        console.error('Response: ' + xhr.responseText);  
+        if (insert.prop('disabled')) {
+            insert.prop('disabled', true);
         }
-      });
+    }
 
-
-
-
-
-
-
+    $.ajax({
+        url: '../ajaxreqshopadmin.php',
+        type: 'GET',
+        data: { prodId: prodId, prodvalue: value, prodname: name },
+        success: function(response) {
+            $('#printresult').html(response);
+            todaysdata();
+        },
+        error: function(xhr, status, error) {
+            console.error('AJAX error:', error);
+        }
+    });
 });
 
-
-
-
-
-function todaysdata(){
-        // fetch today's data
+function todaysdata() {
     $.ajax({
         url: '../shopadmin_todaysproduct.php',
         type: 'GET',
-        data: { date: new Date().toISOString().slice(0,10) }, // YYYY-MM-DD
+        data: { date: new Date().toISOString().slice(0, 10) },
         success: function(todayData) {
             $('.todayprods').html(todayData);
         },
         error: function(xhr, status, error) {
-            console.error("Error fetching today’s data:", error);
+            console.error("Error fetching today's data:", error);
         }
     });
 }
-
 </script>
-
- 
-
-
-
-
-
-
-
-

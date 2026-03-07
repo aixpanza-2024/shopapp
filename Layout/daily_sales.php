@@ -2,19 +2,17 @@
 include("web_shopadmin_header.php");
 date_default_timezone_set('Asia/Kolkata');
 
-// --- Default time range: 2 PM today → 2 AM next day ---
-$hour = (int)date('H');
-if ($hour >= 14) {
-    $def_start = date('Y-m-d') . ' 14:00';
-    $def_end   = date('Y-m-d', strtotime('+1 day')) . ' 02:00';
-} else {
-    // Before 2 PM — still in previous shop day
-    $def_start = date('Y-m-d', strtotime('-1 day')) . ' 14:00';
-    $def_end   = date('Y-m-d') . ' 02:00';
-}
+// --- Default time range: full current day ---
+$def_start = date('Y-m-d') . ' 00:00';
+$def_end   = date('Y-m-d') . ' 23:59';
 
-$start_time   = isset($_GET['start_time'])    && $_GET['start_time']    !== '' ? $_GET['start_time']    : $def_start;
-$end_time     = isset($_GET['end_time'])      && $_GET['end_time']      !== '' ? $_GET['end_time']      : $def_end;
+$start_time = isset($_GET['start_time']) && $_GET['start_time'] !== '' ? $_GET['start_time'] : $def_start;
+$end_time   = isset($_GET['end_time'])   && $_GET['end_time']   !== '' ? $_GET['end_time']   : $def_end;
+
+// Normalize: datetime-local inputs send 'T' separator (e.g. 2026-03-07T14:00)
+// but DB stores with a space — convert to space for reliable SQL comparison
+$start_time = str_replace('T', ' ', $start_time);
+$end_time   = str_replace('T', ' ', $end_time);
 $pay_filter   = isset($_GET['pay_filter'])    && $_GET['pay_filter']    !== '' ? $_GET['pay_filter']    : 'cash';
 
 $shopId = isset($_SESSION['selectshop']) ? intval($_SESSION['selectshop']) : 0;
