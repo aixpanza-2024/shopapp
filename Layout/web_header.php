@@ -4,6 +4,11 @@ if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params(315360000);
     session_start();
 }
+// Redirect to login if session is lost
+if (!isset($_SESSION['usersession'])) {
+    header('Location: /shopapp/index.php');
+    exit;
+}
 include_once("../db.php");
 
 ?>

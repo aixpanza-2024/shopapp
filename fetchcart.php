@@ -36,7 +36,7 @@ $resultfetch = $cartresult->get_result();
 // Fetch staff list for current shop
 $staffList = [];
 $shopId = isset($_SESSION['selectshop']) ? intval($_SESSION['selectshop']) : 0;
-$staffQuery = $conn->prepare("SELECT name FROM staff WHERE sh_id = ? AND status = 'Active' ORDER BY name ASC");
+$staffQuery = $conn->prepare("SELECT name FROM staff WHERE sh_id = ? AND status = 1 ORDER BY name ASC");
 if ($staffQuery) {
     $staffQuery->bind_param("i", $shopId);
     $staffQuery->execute();

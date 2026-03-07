@@ -16,39 +16,31 @@ $(document).ready(function() {
 
 
 //for listing the product to the cart
-var currentCategoryRequest = null; // track pending AJAX to prevent race condition
-
 $(document).on('click', '.clickloadBoxes', function() {
 
   // Highlight the active category
   $('.clickloadBoxes').removeClass('active-box');
   $(this).addClass('active-box');
 
-  // Abort any previous pending category request to prevent race condition
-  // (e.g. slow cat2 query overwriting cat1 results after cat1 was already selected)
-  if (currentCategoryRequest) {
-    currentCategoryRequest.abort();
-    currentCategoryRequest = null;
-  }
-
   // Get all the divs with class 'box'
   var categoryId = $(this).find('.boxfetch').val();
 
+
       // AJAX call using jQuery
-      currentCategoryRequest = $.ajax({
+      $.ajax({
         url: '../productajax.php', // Your server endpoint
         type: 'GET',
         data:  { divId: categoryId },
         success: function(response) {
             console.log("sucesss");
           $('#printcategory').html(response);
-          currentCategoryRequest = null;
+
 
         },
-        error: function(xhr, status, error) {
-          if (status === 'abort') return; // ignore intentional aborts
-          console.error('Error Status: ' + status);
-          console.error('Error Thrown: ' + error);
+        error: function(error) {
+          console.error('Error Status: ' + status); // e.g. 'error'
+        console.error('Error Thrown: ' + error);  // e.g. the actual error message
+        console.error('Response: ' + xhr.responseText);
         }
       });
 
