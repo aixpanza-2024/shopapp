@@ -13,7 +13,7 @@ $end_time   = isset($_GET['end_time'])   && $_GET['end_time']   !== '' ? $_GET['
 // but DB stores with a space — convert to space for reliable SQL comparison
 $start_time = str_replace('T', ' ', $start_time);
 $end_time   = str_replace('T', ' ', $end_time);
-$pay_filter   = isset($_GET['pay_filter'])    && $_GET['pay_filter']    !== '' ? $_GET['pay_filter']    : 'cash';
+$pay_filter   = isset($_GET['pay_filter'])    && $_GET['pay_filter']    !== '' ? $_GET['pay_filter']    : 'cash_in_hand';
 
 $shopId = isset($_SESSION['selectshop']) ? intval($_SESSION['selectshop']) : 0;
 
