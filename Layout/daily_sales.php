@@ -13,7 +13,7 @@ $end_time   = isset($_GET['end_time'])   && $_GET['end_time']   !== '' ? $_GET['
 // but DB stores with a space — convert to space for reliable SQL comparison
 $start_time = str_replace('T', ' ', $start_time);
 $end_time   = str_replace('T', ' ', $end_time);
-$pay_filter   = isset($_GET['pay_filter'])    && $_GET['pay_filter']    !== '' ? $_GET['pay_filter']    : 'cash';
+$pay_filter   = isset($_GET['pay_filter'])    && $_GET['pay_filter']    !== '' ? $_GET['pay_filter']    : 'all';
 
 $shopId = isset($_SESSION['selectshop']) ? intval($_SESSION['selectshop']) : 0;
 
@@ -27,6 +27,8 @@ if ($pay_filter === 'cash') {
     $pay_where = "AND ds.`Payment Mode` LIKE 'staff%'";
 } elseif ($pay_filter === 'split') {
     $pay_where = "AND ds.`Payment Mode` LIKE 'split:%'";
+} elseif ($pay_filter === 'online') {
+    $pay_where = "AND ds.`Payment Mode` = 'online'";
 }
 // 'all' → no extra filter
 
@@ -166,7 +168,14 @@ $detStmt->close();
             <label class="form-label mb-1">Payment</label>
             <select name="pay_filter" class="form-select">
               <?php
-              $opts = ['cash' => '💵 Cash', 'split' => '✂️ Split (Cash)'];
+              $opts = [
+                'all'    => '🔁 All',
+                'cash'   => '💵 Cash',
+                'upi'    => '📱 UPI',
+                'split'  => '✂️ Split',
+                'online' => '🛵 Online',
+                'staff'  => '👤 Staff',
+              ];
               foreach ($opts as $val => $lbl) {
                 $sel = ($pay_filter === $val) ? 'selected' : '';
                 echo "<option value=\"$val\" $sel>$lbl</option>";
