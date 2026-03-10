@@ -291,6 +291,12 @@ else
           <button class="btn btn-primary btn-lg w-100 mb-2" onclick="newbill('normal','upi')" data-bs-dismiss="modal">
             📱 UPI
           </button>
+          <button class="btn btn-secondary btn-lg w-100 mb-2 text-white" onclick="showSplitPicker()">
+            ✂️ Split
+          </button>
+          <button class="btn btn-info btn-lg w-100 mb-2 text-white" onclick="newbill('normal','online')" data-bs-dismiss="modal">
+            🛵 Online
+          </button>
           <button class="btn btn-warning btn-lg w-100 text-white" onclick="showStaffPicker()">
             👤 Staff
           </button>
@@ -312,6 +318,22 @@ else
             <?php endif; ?>
           </div>
           <button class="btn btn-link mt-3" onclick="showPayView1()">← Back</button>
+        </div>
+
+        <!-- View 3: Split payment -->
+        <div id="payView3" style="display:none;">
+          <p class="mb-2 fw-bold">Split Payment</p>
+          <p class="mb-3 text-muted">Total: ₹<span id="splitTotal"></span></p>
+          <div class="mb-3 text-start">
+            <label class="form-label">💵 Cash Amount</label>
+            <input type="number" id="splitCash" class="form-control" placeholder="0" min="0" oninput="calcSplitUpi()">
+          </div>
+          <div class="mb-3 text-start">
+            <label class="form-label">📱 UPI Amount</label>
+            <input type="number" id="splitUpi" class="form-control" placeholder="0" readonly>
+          </div>
+          <button class="btn btn-success w-100 mb-2" onclick="confirmSplit()" data-bs-dismiss="modal">Confirm Split</button>
+          <button class="btn btn-link" onclick="showPayView1()">← Back</button>
         </div>
 
       </div>
@@ -355,8 +377,31 @@ function showStaffPicker() {
     document.getElementById('payView2').style.display = 'block';
     document.getElementById('paymentModalTitle').textContent = 'Select Staff';
 }
+function showSplitPicker() {
+    document.getElementById('payView1').style.display = 'none';
+    document.getElementById('payView3').style.display = 'block';
+    document.getElementById('paymentModalTitle').textContent = 'Split Payment';
+    var total = <?= json_encode($grandTotal) ?>;
+    document.getElementById('splitTotal').textContent = total.toFixed(2);
+    document.getElementById('splitCash').value = '';
+    document.getElementById('splitUpi').value = total.toFixed(2);
+}
+function calcSplitUpi() {
+    var total = <?= json_encode($grandTotal) ?>;
+    var cash = parseFloat(document.getElementById('splitCash').value) || 0;
+    var upi = total - cash;
+    document.getElementById('splitUpi').value = upi >= 0 ? upi.toFixed(2) : '0.00';
+}
+function confirmSplit() {
+    var total = <?= json_encode($grandTotal) ?>;
+    var cash = parseFloat(document.getElementById('splitCash').value) || 0;
+    var upi = total - cash;
+    if (cash <= 0 || upi < 0) { alert('Enter a valid cash amount.'); return; }
+    newbill('normal', 'split:cash=' + cash.toFixed(2) + '|upi=' + upi.toFixed(2));
+}
 function showPayView1() {
     document.getElementById('payView2').style.display = 'none';
+    document.getElementById('payView3').style.display = 'none';
     document.getElementById('payView1').style.display = 'block';
     document.getElementById('paymentModalTitle').textContent = 'Payment Method';
 }
