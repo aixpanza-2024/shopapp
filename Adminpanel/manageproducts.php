@@ -138,8 +138,16 @@ while($fetchshop = mysqli_fetch_array($fetchshopq)) {
                                         </div>
                                       
                                         <div class="form-group">
-                                            <label for="expiry_date">Expiry Date</label>
-                                            <input type="date" class="form-control" id="expiry_date" name="expiry_date">
+                                            <label>Expiry</label>
+                                            <div class="input-group">
+                                                <input type="number" class="form-control" name="expiry_value" placeholder="e.g. 30" min="0">
+                                                <select class="form-control" name="expiry_type">
+                                                    <option value="">-- No Expiry --</option>
+                                                    <option value="Days">Days</option>
+                                                    <option value="Months">Months</option>
+                                                    <option value="Years">Years</option>
+                                                </select>
+                                            </div>
                                             <small class="text-muted">Leave blank if product has no expiry.</small>
                                         </div>
 
@@ -158,7 +166,8 @@ $saleprice= sanitizeInput($_POST['saleprice']);
 $supplier= sanitizeInput($_POST['supplier']);
 $supplier_text= sanitizeInput($_POST['supplier_text']);
 $status= sanitizeInput($_POST['status']);
-$expiry_date = !empty($_POST['expiry_date']) ? sanitizeInput($_POST['expiry_date']) : null;
+$expiry_value = !empty($_POST['expiry_value']) ? intval($_POST['expiry_value']) : null;
+$expiry_type  = !empty($_POST['expiry_type'])  ? sanitizeInput($_POST['expiry_type']) : null;
 if($_SESSION['userpermission']=="Super Admin" || $_SESSION['userpermission']=="Admin")
 {
 $shopid= sanitizeInput($_POST['shopid']);
@@ -169,8 +178,10 @@ else
 }
 $date = date("d/m/Y");
 
-$addprod="INSERT INTO `products`(`categorie`, `name`, `purchaseprice`, `saleprice`, `sup_id`, `supplier_text`, `status`, `shopid`, `date`, `expiry_date`)
-VALUES  ('$categorie','$name','$purchaseprice','$saleprice','$supplier','$supplier_text','$status','$shopid','$date'," . ($expiry_date ? "'$expiry_date'" : "NULL") . ")";
+$ev = $expiry_value !== null ? "'$expiry_value'" : "NULL";
+$et = $expiry_type  !== null ? "'$expiry_type'"  : "NULL";
+$addprod="INSERT INTO `products`(`categorie`, `name`, `purchaseprice`, `saleprice`, `sup_id`, `supplier_text`, `status`, `shopid`, `date`, `expiry_value`, `expiry_type`)
+VALUES  ('$categorie','$name','$purchaseprice','$saleprice','$supplier','$supplier_text','$status','$shopid','$date',$ev,$et)";
 $addprodq=mysqli_query($conn, $addprod);
 if($addprodq==1) {
 ?>
@@ -242,7 +253,7 @@ else{
                                                 <th scope="col">Purc_Price</th>
                                                 <th scope="col">Sale_price</th>
                                                 <th scope="col">Supplier Name</th>
-                                                <th scope="col">Expiry Date</th>
+                                                <th scope="col">Expiry</th>
                                                 <th scope="col">Edit</th>
                                                 <th scope="col">Delete</th>
                                             </tr>
@@ -275,18 +286,8 @@ while($prodfetchq1 = mysqli_fetch_array($prodfetchq)) {
                                                 <td><?php echo $prodfetchq1['supplier_text'] ?></td>
                                                 <td>
                                                     <?php
-                                                    if (!empty($prodfetchq1['expiry_date'])) {
-                                                        $exp = new DateTime($prodfetchq1['expiry_date']);
-                                                        $today = new DateTime();
-                                                        $diff = $today->diff($exp)->days;
-                                                        $expired = $exp < $today;
-                                                        if ($expired) {
-                                                            echo '<span class="badge badge-danger">Expired</span>';
-                                                        } elseif ($diff <= 7) {
-                                                            echo '<span class="badge badge-warning">' . $exp->format('d M Y') . ' ⚠️</span>';
-                                                        } else {
-                                                            echo $exp->format('d M Y');
-                                                        }
+                                                    if (!empty($prodfetchq1['expiry_value']) && !empty($prodfetchq1['expiry_type'])) {
+                                                        echo htmlspecialchars($prodfetchq1['expiry_value']) . ' ' . htmlspecialchars($prodfetchq1['expiry_type']);
                                                     } else {
                                                         echo '<span class="text-muted">—</span>';
                                                     }

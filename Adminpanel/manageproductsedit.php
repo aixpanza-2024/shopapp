@@ -189,9 +189,17 @@ while($fetchshop = mysqli_fetch_array($fetchshopq)) {
                                             <!-- choosing shop based on admin or staff  end-->
                                         </div>
                                         <div class="form-group">
-                                            <label for="expiry_date">Expiry Date</label>
-                                            <input type="date" class="form-control" id="expiry_date" name="expiry_date"
-                                                value="<?php echo !empty($prodfetchq1['expiry_date']) ? htmlspecialchars($prodfetchq1['expiry_date']) : ''; ?>">
+                                            <label>Expiry</label>
+                                            <div class="input-group">
+                                                <input type="number" class="form-control" name="expiry_value" placeholder="e.g. 30" min="0"
+                                                    value="<?php echo !empty($prodfetchq1['expiry_value']) ? htmlspecialchars($prodfetchq1['expiry_value']) : ''; ?>">
+                                                <select class="form-control" name="expiry_type">
+                                                    <option value="">-- No Expiry --</option>
+                                                    <option value="Days"   <?php echo ($prodfetchq1['expiry_type'] === 'Days')   ? 'selected' : ''; ?>>Days</option>
+                                                    <option value="Months" <?php echo ($prodfetchq1['expiry_type'] === 'Months') ? 'selected' : ''; ?>>Months</option>
+                                                    <option value="Years"  <?php echo ($prodfetchq1['expiry_type'] === 'Years')  ? 'selected' : ''; ?>>Years</option>
+                                                </select>
+                                            </div>
                                             <small class="text-muted">Leave blank if product has no expiry.</small>
                                         </div>
 
@@ -220,7 +228,8 @@ if (isset($_POST["updateprod"])) {
     $supplier= sanitizeInput($_POST['supplier']);
     $supplier_text= sanitizeInput($_POST['supplier_text']);
     $status= sanitizeInput($_POST['status']);
-    $expiry_date = !empty($_POST['expiry_date']) ? sanitizeInput($_POST['expiry_date']) : null;
+    $expiry_value = !empty($_POST['expiry_value']) ? intval($_POST['expiry_value']) : null;
+    $expiry_type  = !empty($_POST['expiry_type'])  ? sanitizeInput($_POST['expiry_type']) : null;
     if($_SESSION['userpermission']!="Super Admin" || $_SESSION['userpermission']=="Admin")
     {
     $shopid= sanitizeInput($_POST['shopid']);
@@ -231,9 +240,10 @@ if (isset($_POST["updateprod"])) {
     }
     $date = date("d/m/Y");
 
-$expiry_val = $expiry_date ? "'$expiry_date'" : "NULL";
+$ev = $expiry_value !== null ? "'$expiry_value'" : "NULL";
+$et = $expiry_type  !== null ? "'$expiry_type'"  : "NULL";
 $updateprod="UPDATE `products` SET `categorie`='$categorie',`name`='$name',`purchaseprice`='$purchaseprice',`saleprice`='$saleprice',`sup_id`='$supplier',
-`supplier_text`='$supplier_text',`status`='$status',`shopid`='$shopid',`expiry_date`=$expiry_val WHERE `p_id`='$prodedit'";
+`supplier_text`='$supplier_text',`status`='$status',`shopid`='$shopid',`expiry_value`=$ev,`expiry_type`=$et WHERE `p_id`='$prodedit'";
 $updateprodq=mysqli_query($conn, $updateprod);
 if($updateprodq==1) {
 ?>
