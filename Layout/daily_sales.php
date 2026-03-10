@@ -241,9 +241,10 @@ $detStmt->close();
             <select name="pay_filter" class="form-select">
               <?php
               $opts = [
+                'cash_in_hand' => '🧾 Cash in Hand',
                 'cash'         => '💵 Cash',
                 'split'        => '✂️ Split (Cash)',
-                'cash_in_hand' => '🧾 Cash in Hand',
+                
               ];
               foreach ($opts as $val => $lbl) {
                 $sel = ($pay_filter === $val) ? 'selected' : '';
