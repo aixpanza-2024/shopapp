@@ -13,7 +13,7 @@ $end_time   = isset($_GET['end_time'])   && $_GET['end_time']   !== '' ? $_GET['
 // but DB stores with a space — convert to space for reliable SQL comparison
 $start_time = str_replace('T', ' ', $start_time);
 $end_time   = str_replace('T', ' ', $end_time);
-$pay_filter   = isset($_GET['pay_filter'])    && $_GET['pay_filter']    !== '' ? $_GET['pay_filter']    : 'all';
+$pay_filter   = isset($_GET['pay_filter'])    && $_GET['pay_filter']    !== '' ? $_GET['pay_filter']    : 'cash';
 
 $shopId = isset($_SESSION['selectshop']) ? intval($_SESSION['selectshop']) : 0;
 
@@ -103,27 +103,53 @@ $catResult = $catStmt->get_result();
 $catStmt->close();
 
 // --- Item detail list ---
-$detailSQL = "
-    SELECT
-        ds.`product name`  AS prod_name,
-        ds.quantity,
-        ds.`Selling Price` AS price,
-        ds.quantity * ds.`Selling Price` AS subtotal,
-        ds.`Payment Mode`  AS pay_mode,
-        ds.`payment status` AS pay_status,
-        ds.`Inv no`        AS inv_no,
-        ds.Time,
-        c.categorie        AS category_name
-    FROM daily_productsale ds
-    JOIN products p  ON ds.p_id = p.p_id
-    JOIN categorie c ON c.cat_id = p.categorie
-    WHERE ds.sh_id = ?
-      AND ds.`payment status` != 'notpaid'
-      AND ds.Time >= ?
-      AND ds.Time <= ?
-      $pay_where
-    ORDER BY ds.Time DESC
-";
+if ($pay_filter === 'split') {
+    // For split: group by invoice and show cash amount extracted from Payment Mode
+    $detailSQL = "
+        SELECT
+            ds.`Inv no`        AS inv_no,
+            ds.Time,
+            SUM(ds.quantity)   AS quantity,
+            SUM(ds.quantity * ds.`Selling Price`) AS full_total,
+            CAST(
+                SUBSTRING_INDEX(
+                    SUBSTRING_INDEX(MAX(ds.`Payment Mode`), 'cash=', -1),
+                    '|', 1
+                ) AS DECIMAL(10,2)
+            ) AS cash_amount,
+            MAX(ds.`Payment Mode`) AS pay_mode
+        FROM daily_productsale ds
+        WHERE ds.sh_id = ?
+          AND ds.`payment status` != 'notpaid'
+          AND ds.Time >= ?
+          AND ds.Time <= ?
+          AND ds.`Payment Mode` LIKE 'split:%'
+        GROUP BY ds.`Inv no`, ds.Time
+        ORDER BY ds.Time DESC
+    ";
+} else {
+    $detailSQL = "
+        SELECT
+            ds.`product name`  AS prod_name,
+            ds.quantity,
+            ds.`Selling Price` AS price,
+            ds.quantity * ds.`Selling Price` AS subtotal,
+            ds.`Payment Mode`  AS pay_mode,
+            ds.`payment status` AS pay_status,
+            ds.`Inv no`        AS inv_no,
+            ds.Time,
+            c.categorie        AS category_name
+        FROM daily_productsale ds
+        JOIN products p  ON ds.p_id = p.p_id
+        JOIN categorie c ON c.cat_id = p.categorie
+        WHERE ds.sh_id = ?
+          AND ds.`payment status` != 'notpaid'
+          AND ds.Time >= ?
+          AND ds.Time <= ?
+          $pay_where
+        ORDER BY ds.Time DESC
+    ";
+}
 $detStmt = $conn->prepare($detailSQL);
 $detStmt->bind_param("iss", $shopId, $start_time, $end_time);
 $detStmt->execute();
@@ -169,12 +195,8 @@ $detStmt->close();
             <select name="pay_filter" class="form-select">
               <?php
               $opts = [
-                'all'    => '🔁 All',
-                'cash'   => '💵 Cash',
-                'upi'    => '📱 UPI',
-                'split'  => '✂️ Split',
-                'online' => '🛵 Online',
-                'staff'  => '👤 Staff',
+                'cash'  => '💵 Cash',
+                'split' => '✂️ Split (Cash)',
               ];
               foreach ($opts as $val => $lbl) {
                 $sel = ($pay_filter === $val) ? 'selected' : '';
@@ -270,6 +292,16 @@ $detStmt->close();
       <div class="card-body table-responsive p-0">
         <table class="table table-striped table-bordered align-middle text-center mb-0" style="font-size:0.85rem;">
           <thead class="table-dark">
+            <?php if ($pay_filter === 'split'): ?>
+            <tr>
+              <th>Time</th>
+              <th>Inv#</th>
+              <th>Total Items</th>
+              <th>Bill Total</th>
+              <th>Cash Received</th>
+              <th>UPI Received</th>
+            </tr>
+            <?php else: ?>
             <tr>
               <th>Time</th>
               <th>Inv#</th>
@@ -280,10 +312,26 @@ $detStmt->close();
               <th>Subtotal</th>
               <th>Mode</th>
             </tr>
+            <?php endif; ?>
           </thead>
           <tbody>
             <?php if ($detResult->num_rows === 0): ?>
             <tr><td colspan="8" class="text-center text-muted py-3">No sales found for this period.</td></tr>
+            <?php elseif ($pay_filter === 'split'): ?>
+            <?php while ($det = $detResult->fetch_assoc()):
+                preg_match('/cash=([\d.]+)\|upi=([\d.]+)/', $det['pay_mode'], $m);
+                $cash_amt = isset($m[1]) ? (float)$m[1] : 0;
+                $upi_amt  = isset($m[2]) ? (float)$m[2] : 0;
+            ?>
+            <tr>
+              <td><?php echo date('h:i A', strtotime($det['Time'])); ?></td>
+              <td><?php echo htmlspecialchars($det['inv_no']); ?></td>
+              <td><?php echo intval($det['quantity']); ?></td>
+              <td>₹<?php echo number_format($det['full_total'], 2); ?></td>
+              <td><strong class="text-success">₹<?php echo number_format($cash_amt, 2); ?></strong></td>
+              <td><span class="text-primary">₹<?php echo number_format($upi_amt, 2); ?></span></td>
+            </tr>
+            <?php endwhile; ?>
             <?php else: ?>
             <?php while ($det = $detResult->fetch_assoc()): ?>
             <tr>
@@ -299,16 +347,6 @@ $detStmt->close();
                 $mode = strtolower($det['pay_mode']);
                 if ($mode === 'cash') {
                     echo '<span class="badge bg-success">Cash</span>';
-                } elseif ($mode === 'upi') {
-                    echo '<span class="badge bg-primary">UPI</span>';
-                } elseif (str_starts_with($mode, 'split:')) {
-                    preg_match('/cash=([\d.]+)\|upi=([\d.]+)/', $det['pay_mode'], $m);
-                    $cash_amt = isset($m[1]) ? number_format((float)$m[1], 2) : '?';
-                    $upi_amt  = isset($m[2]) ? number_format((float)$m[2], 2) : '?';
-                    echo '<span class="badge bg-warning text-dark">Split</span>';
-                    echo '<br><small class="text-success">💵₹' . $cash_amt . '</small>';
-                } elseif (str_starts_with($mode, 'staff')) {
-                    echo '<span class="badge bg-warning text-dark">' . htmlspecialchars($det['pay_mode']) . '</span>';
                 } else {
                     echo htmlspecialchars($det['pay_mode']);
                 }
