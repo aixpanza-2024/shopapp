@@ -1,7 +1,16 @@
 <?php
-ini_set('session.gc_maxlifetime', 315360000); // 10 years
-session_set_cookie_params(315360000);
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    ini_set('session.gc_maxlifetime', 315360000); // 10 years
+    session_set_cookie_params(315360000);
+    session_start();
+}
+if (isset($_COOKIE[session_name()])) {
+    setcookie(session_name(), session_id(), time() + 315360000, '/');
+}
+if (!isset($_SESSION['usersession'])) {
+    header('Location: /shopapp/index.php');
+    exit;
+}
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
