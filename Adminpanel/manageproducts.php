@@ -137,9 +137,12 @@ while($fetchshop = mysqli_fetch_array($fetchshopq)) {
                                             <!-- choosing shop based on admin or staff  end-->
                                         </div>
                                       
-                                   
-                                        
-                                       
+                                        <div class="form-group">
+                                            <label for="expiry_date">Expiry Date</label>
+                                            <input type="date" class="form-control" id="expiry_date" name="expiry_date">
+                                            <small class="text-muted">Leave blank if product has no expiry.</small>
+                                        </div>
+
                                         <button type="submit"  name="addproducts" class="btn btn-primary">Submit</button>
                                     </form>
                                 </div>
@@ -155,19 +158,19 @@ $saleprice= sanitizeInput($_POST['saleprice']);
 $supplier= sanitizeInput($_POST['supplier']);
 $supplier_text= sanitizeInput($_POST['supplier_text']);
 $status= sanitizeInput($_POST['status']);
+$expiry_date = !empty($_POST['expiry_date']) ? sanitizeInput($_POST['expiry_date']) : null;
 if($_SESSION['userpermission']=="Super Admin" || $_SESSION['userpermission']=="Admin")
 {
 $shopid= sanitizeInput($_POST['shopid']);
 }
 else
 {
-    $shopid= sanitizeInput($_SESSION['selectshop']);  
+    $shopid= sanitizeInput($_SESSION['selectshop']);
 }
-$date = date("d/m/Y"); 
+$date = date("d/m/Y");
 
-
-echo $addprod="INSERT INTO `products`(`categorie`, `name`, `purchaseprice`, `saleprice`, `sup_id`, `supplier_text`, `status`, `shopid`, `date`) 
-VALUES  ('$categorie','$name','$purchaseprice','$saleprice','$supplier','$supplier_text','$status','$shopid','$date')";
+$addprod="INSERT INTO `products`(`categorie`, `name`, `purchaseprice`, `saleprice`, `sup_id`, `supplier_text`, `status`, `shopid`, `date`, `expiry_date`)
+VALUES  ('$categorie','$name','$purchaseprice','$saleprice','$supplier','$supplier_text','$status','$shopid','$date'," . ($expiry_date ? "'$expiry_date'" : "NULL") . ")";
 $addprodq=mysqli_query($conn, $addprod);
 if($addprodq==1) {
 ?>
@@ -239,7 +242,7 @@ else{
                                                 <th scope="col">Purc_Price</th>
                                                 <th scope="col">Sale_price</th>
                                                 <th scope="col">Supplier Name</th>
-                                                
+                                                <th scope="col">Expiry Date</th>
                                                 <th scope="col">Edit</th>
                                                 <th scope="col">Delete</th>
                                             </tr>
@@ -270,6 +273,25 @@ while($prodfetchq1 = mysqli_fetch_array($prodfetchq)) {
                                                 <td><?php echo $prodfetchq1['purchaseprice'] ?></td>
                                                 <td><?php echo $prodfetchq1['saleprice'] ?></td>
                                                 <td><?php echo $prodfetchq1['supplier_text'] ?></td>
+                                                <td>
+                                                    <?php
+                                                    if (!empty($prodfetchq1['expiry_date'])) {
+                                                        $exp = new DateTime($prodfetchq1['expiry_date']);
+                                                        $today = new DateTime();
+                                                        $diff = $today->diff($exp)->days;
+                                                        $expired = $exp < $today;
+                                                        if ($expired) {
+                                                            echo '<span class="badge badge-danger">Expired</span>';
+                                                        } elseif ($diff <= 7) {
+                                                            echo '<span class="badge badge-warning">' . $exp->format('d M Y') . ' ⚠️</span>';
+                                                        } else {
+                                                            echo $exp->format('d M Y');
+                                                        }
+                                                    } else {
+                                                        echo '<span class="text-muted">—</span>';
+                                                    }
+                                                    ?>
+                                                </td>
                                                 <td> <a href="" onclick="return confirmDelete(<?php echo $prodfetchq1['p_id'] ?>)">Delete</a></td>
                                                 <td> <a href="manageproductsedit.php?prodedit=<?php echo $prodfetchq1['p_id'] ?>">Edit</a></td>
                                            

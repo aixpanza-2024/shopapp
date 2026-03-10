@@ -188,10 +188,13 @@ while($fetchshop = mysqli_fetch_array($fetchshopq)) {
                                             </select>
                                             <!-- choosing shop based on admin or staff  end-->
                                         </div>
-                                      
-                                   
-                                        
-                                       
+                                        <div class="form-group">
+                                            <label for="expiry_date">Expiry Date</label>
+                                            <input type="date" class="form-control" id="expiry_date" name="expiry_date"
+                                                value="<?php echo !empty($prodfetchq1['expiry_date']) ? htmlspecialchars($prodfetchq1['expiry_date']) : ''; ?>">
+                                            <small class="text-muted">Leave blank if product has no expiry.</small>
+                                        </div>
+
                                         <button type="submit"  name="updateprod" class="btn btn-primary">Submit</button>
                                     </form>
                                     <?php
@@ -217,19 +220,20 @@ if (isset($_POST["updateprod"])) {
     $supplier= sanitizeInput($_POST['supplier']);
     $supplier_text= sanitizeInput($_POST['supplier_text']);
     $status= sanitizeInput($_POST['status']);
+    $expiry_date = !empty($_POST['expiry_date']) ? sanitizeInput($_POST['expiry_date']) : null;
     if($_SESSION['userpermission']!="Super Admin" || $_SESSION['userpermission']=="Admin")
     {
     $shopid= sanitizeInput($_POST['shopid']);
     }
     else
     {
-        $shopid= sanitizeInput($_SESSION['selectshop']);  
+        $shopid= sanitizeInput($_SESSION['selectshop']);
     }
-    $date = date("d/m/Y"); 
+    $date = date("d/m/Y");
 
-
+$expiry_val = $expiry_date ? "'$expiry_date'" : "NULL";
 $updateprod="UPDATE `products` SET `categorie`='$categorie',`name`='$name',`purchaseprice`='$purchaseprice',`saleprice`='$saleprice',`sup_id`='$supplier',
-`supplier_text`='$supplier_text',`status`='$status',`shopid`='$shopid' WHERE `p_id`='$prodedit'";
+`supplier_text`='$supplier_text',`status`='$status',`shopid`='$shopid',`expiry_date`=$expiry_val WHERE `p_id`='$prodedit'";
 $updateprodq=mysqli_query($conn, $updateprod);
 if($updateprodq==1) {
 ?>
