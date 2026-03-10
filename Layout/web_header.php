@@ -4,6 +4,10 @@ if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params(315360000);
     session_start();
 }
+// Refresh session cookie expiry on every page load so it never expires
+if (isset($_COOKIE[session_name()])) {
+    setcookie(session_name(), session_id(), time() + 315360000, '/');
+}
 // Redirect to login if session is lost
 if (!isset($_SESSION['usersession'])) {
     header('Location: /shopapp/index.php');

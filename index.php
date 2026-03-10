@@ -59,6 +59,8 @@ if (isset($_POST["login"])) {
                         $_SESSION['userpermission'] = $permission;
                         $selectshop =$row['sh_id'];
                         $_SESSION['selectshop']=$selectshop;
+                        // Set a long-lived session cookie (10 years) on login
+                        setcookie(session_name(), session_id(), time() + 315360000, '/');
                         ?>
 <script>
     
