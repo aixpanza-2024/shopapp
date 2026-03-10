@@ -25,22 +25,52 @@ if ($pay_filter === 'cash') {
     $pay_where = "AND ds.`Payment Mode` = 'upi'";
 } elseif ($pay_filter === 'staff') {
     $pay_where = "AND ds.`Payment Mode` LIKE 'staff%'";
+} elseif ($pay_filter === 'split') {
+    $pay_where = "AND ds.`Payment Mode` LIKE 'split:%'";
 }
 // 'all' → no extra filter
 
 // --- Summary: totals ---
-$summarySQL = "
-    SELECT
-        COUNT(DISTINCT ds.`Inv no`) AS total_bills,
-        SUM(ds.quantity)            AS total_items,
-        SUM(ds.quantity * ds.`Selling Price`) AS total_revenue
-    FROM daily_productsale ds
-    WHERE ds.sh_id = ?
-      AND ds.`payment status` != 'notpaid'
-      AND ds.Time >= ?
-      AND ds.Time <= ?
-      $pay_where
-";
+// For split filter: extract cash amount per invoice and sum those only
+if ($pay_filter === 'split') {
+    $summarySQL = "
+        SELECT
+            COUNT(DISTINCT inv.inv_no)  AS total_bills,
+            SUM(inv.item_qty)           AS total_items,
+            SUM(inv.cash_amount)        AS total_revenue
+        FROM (
+            SELECT
+                ds.`Inv no` AS inv_no,
+                SUM(ds.quantity) AS item_qty,
+                CAST(
+                    SUBSTRING_INDEX(
+                        SUBSTRING_INDEX(MAX(ds.`Payment Mode`), 'cash=', -1),
+                        '|', 1
+                    ) AS DECIMAL(10,2)
+                ) AS cash_amount
+            FROM daily_productsale ds
+            WHERE ds.sh_id = ?
+              AND ds.`payment status` != 'notpaid'
+              AND ds.Time >= ?
+              AND ds.Time <= ?
+              AND ds.`Payment Mode` LIKE 'split:%'
+            GROUP BY ds.`Inv no`
+        ) AS inv
+    ";
+} else {
+    $summarySQL = "
+        SELECT
+            COUNT(DISTINCT ds.`Inv no`) AS total_bills,
+            SUM(ds.quantity)            AS total_items,
+            SUM(ds.quantity * ds.`Selling Price`) AS total_revenue
+        FROM daily_productsale ds
+        WHERE ds.sh_id = ?
+          AND ds.`payment status` != 'notpaid'
+          AND ds.Time >= ?
+          AND ds.Time <= ?
+          $pay_where
+    ";
+}
 $summaryStmt = $conn->prepare($summarySQL);
 $summaryStmt->bind_param("iss", $shopId, $start_time, $end_time);
 $summaryStmt->execute();
@@ -136,7 +166,7 @@ $detStmt->close();
             <label class="form-label mb-1">Payment</label>
             <select name="pay_filter" class="form-select">
               <?php
-              $opts = ['cash' => '💵 Cash'];
+              $opts = ['cash' => '💵 Cash', 'split' => '✂️ Split (Cash)'];
               foreach ($opts as $val => $lbl) {
                 $sel = ($pay_filter === $val) ? 'selected' : '';
                 echo "<option value=\"$val\" $sel>$lbl</option>";
@@ -179,7 +209,7 @@ $detStmt->close();
             <div style="font-size:1.5rem;font-weight:bold;color:#b8860b;">
               ₹<?php echo number_format($summary['total_revenue'] ?? 0, 0); ?>
             </div>
-            <div class="text-muted small">Revenue</div>
+            <div class="text-muted small"><?php echo $pay_filter === 'split' ? 'Cash Revenue' : 'Revenue'; ?></div>
           </div>
         </div>
       </div>
@@ -258,10 +288,21 @@ $detStmt->close();
               <td>
                 <?php
                 $mode = strtolower($det['pay_mode']);
-                if ($mode === 'cash')       echo '<span class="badge bg-success">Cash</span>';
-                elseif ($mode === 'upi')    echo '<span class="badge bg-primary">UPI</span>';
-                elseif (str_starts_with($mode, 'staff')) echo '<span class="badge bg-warning text-dark">' . htmlspecialchars($det['pay_mode']) . '</span>';
-                else echo htmlspecialchars($det['pay_mode']);
+                if ($mode === 'cash') {
+                    echo '<span class="badge bg-success">Cash</span>';
+                } elseif ($mode === 'upi') {
+                    echo '<span class="badge bg-primary">UPI</span>';
+                } elseif (str_starts_with($mode, 'split:')) {
+                    preg_match('/cash=([\d.]+)\|upi=([\d.]+)/', $det['pay_mode'], $m);
+                    $cash_amt = isset($m[1]) ? number_format((float)$m[1], 2) : '?';
+                    $upi_amt  = isset($m[2]) ? number_format((float)$m[2], 2) : '?';
+                    echo '<span class="badge bg-warning text-dark">Split</span>';
+                    echo '<br><small class="text-success">💵₹' . $cash_amt . '</small>';
+                } elseif (str_starts_with($mode, 'staff')) {
+                    echo '<span class="badge bg-warning text-dark">' . htmlspecialchars($det['pay_mode']) . '</span>';
+                } else {
+                    echo htmlspecialchars($det['pay_mode']);
+                }
                 ?>
               </td>
             </tr>
