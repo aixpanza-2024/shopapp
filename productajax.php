@@ -61,16 +61,18 @@ WHERE p.categorie = $data
       );
 ";
   } elseif ($data == 8) {
-    // Plate: admin-activated daily, show when added for today with stock remaining
-    date_default_timezone_set('Asia/Kolkata');
-    $today = date('Y-m-d');
+    // Plate: always show (no availability check)
     $proddisplay = "
 SELECT p.*, d.*
 FROM products p
-INNER JOIN daily_availability d
-    ON d.product_id = p.p_id
-    AND d.available_date = '$today'
-    AND d.available_qty > 0
+LEFT JOIN (
+    SELECT product_id, MAX(updated_at) AS latest_update
+    FROM daily_availability
+    GROUP BY product_id
+) latest ON p.p_id = latest.product_id
+LEFT JOIN daily_availability d
+    ON d.product_id = latest.product_id
+    AND d.updated_at = latest.latest_update
 WHERE p.categorie = $data;
 ";
   } else {
@@ -204,8 +206,8 @@ else
     // 3️⃣ Skip product if sold quantity >= available
     // $category = category of the current product (eg: from DB)
 
-// Apply stock check for Snacks (2) and Plate (8)
-if ($displayprodrow['categorie'] == "2" || $displayprodrow['categorie'] == "8") {
+// Apply stock check for Snacks (2) only
+if ($displayprodrow['categorie'] == "2") {
     if ($total_sold >= $available_qty) {
         continue; // ❌ hide the product
     }
