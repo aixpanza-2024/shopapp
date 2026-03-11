@@ -2,7 +2,7 @@
 if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.gc_maxlifetime', 315360000); // 10 years
     session_set_cookie_params(315360000);
-    session_save_path(realpath(__DIR__ . '/sessions'));
+    $sess = __DIR__ . '/sessions'; if (!is_dir($sess)) @mkdir($sess, 0750, true); session_save_path($sess);
     session_start();
 }
 
