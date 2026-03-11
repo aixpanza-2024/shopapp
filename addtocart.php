@@ -73,11 +73,11 @@ $stmtwthr->close();
 
 
 
-// Get current date/time components
+// Get current date/time components in IST
+date_default_timezone_set('Asia/Kolkata');
 $day = date('d');
 $month = date('m');
 $year = date('Y');
-$dt = new DateTime('now', new DateTimeZone('Asia/Kolkata'));
 $time = date('Y-m-d H:i:s');
 
 // Prepare SQL query using prepared statements

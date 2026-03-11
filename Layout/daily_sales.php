@@ -15,8 +15,6 @@ $start_time = str_replace('T', ' ', $start_time);
 $end_time   = str_replace('T', ' ', $end_time);
 $pay_filter   = isset($_GET['pay_filter'])    && $_GET['pay_filter']    !== '' ? $_GET['pay_filter']    : 'cash_in_hand';
 
-$shopId = isset($_SESSION['selectshop']) ? intval($_SESSION['selectshop']) : 0;
-
 // --- Build payment mode WHERE clause ---
 $pay_where = '';
 if ($pay_filter === 'cash') {
@@ -53,8 +51,7 @@ if ($pay_filter === 'split') {
                     ) AS DECIMAL(10,2)
                 ) AS cash_amount
             FROM daily_productsale ds
-            WHERE ds.sh_id = ?
-              AND ds.`payment status` != 'notpaid'
+            WHERE ds.`payment status` != 'notpaid'
               AND ds.Time >= ?
               AND ds.Time <= ?
               AND ds.`Payment Mode` LIKE 'split:%'
@@ -62,7 +59,7 @@ if ($pay_filter === 'split') {
         ) AS inv
     ";
     $summaryStmt = $conn->prepare($summarySQL);
-    $summaryStmt->bind_param("iss", $shopId, $start_time, $end_time);
+    $summaryStmt->bind_param("ss", $start_time, $end_time);
 } elseif ($pay_filter === 'cash_in_hand') {
     // Cash in Hand: pure cash bills (full) + split bills (cash portion only)
     $summarySQL = "
@@ -76,8 +73,7 @@ if ($pay_filter === 'split') {
                 SUM(ds.quantity) AS item_qty,
                 SUM(ds.quantity * ds.`Selling Price`) AS cash_revenue
             FROM daily_productsale ds
-            WHERE ds.sh_id = ?
-              AND ds.`payment status` != 'notpaid'
+            WHERE ds.`payment status` != 'notpaid'
               AND ds.Time >= ?
               AND ds.Time <= ?
               AND ds.`Payment Mode` = 'cash'
@@ -95,8 +91,7 @@ if ($pay_filter === 'split') {
                     ) AS DECIMAL(10,2)
                 ) AS cash_revenue
             FROM daily_productsale ds
-            WHERE ds.sh_id = ?
-              AND ds.`payment status` != 'notpaid'
+            WHERE ds.`payment status` != 'notpaid'
               AND ds.Time >= ?
               AND ds.Time <= ?
               AND ds.`Payment Mode` LIKE 'split:%'
@@ -104,7 +99,7 @@ if ($pay_filter === 'split') {
         ) AS combined
     ";
     $summaryStmt = $conn->prepare($summarySQL);
-    $summaryStmt->bind_param("ississ", $shopId, $start_time, $end_time, $shopId, $start_time, $end_time);
+    $summaryStmt->bind_param("ssss", $start_time, $end_time, $start_time, $end_time);
 } else {
     $summarySQL = "
         SELECT
@@ -112,14 +107,13 @@ if ($pay_filter === 'split') {
             SUM(ds.quantity)            AS total_items,
             SUM(ds.quantity * ds.`Selling Price`) AS total_revenue
         FROM daily_productsale ds
-        WHERE ds.sh_id = ?
-          AND ds.`payment status` != 'notpaid'
+        WHERE ds.`payment status` != 'notpaid'
           AND ds.Time >= ?
           AND ds.Time <= ?
           $pay_where
     ";
     $summaryStmt = $conn->prepare($summarySQL);
-    $summaryStmt->bind_param("iss", $shopId, $start_time, $end_time);
+    $summaryStmt->bind_param("ss", $start_time, $end_time);
 }
 $summaryStmt->execute();
 $summary = $summaryStmt->get_result()->fetch_assoc();
@@ -134,8 +128,7 @@ $catSQL = "
     FROM daily_productsale ds
     JOIN products p  ON ds.p_id = p.p_id
     JOIN categorie c ON c.cat_id = p.categorie
-    WHERE ds.sh_id = ?
-      AND ds.`payment status` != 'notpaid'
+    WHERE ds.`payment status` != 'notpaid'
       AND ds.Time >= ?
       AND ds.Time <= ?
       $pay_where
@@ -143,7 +136,7 @@ $catSQL = "
     ORDER BY cat_amount DESC
 ";
 $catStmt = $conn->prepare($catSQL);
-$catStmt->bind_param("iss", $shopId, $start_time, $end_time);
+$catStmt->bind_param("ss", $start_time, $end_time);
 $catStmt->execute();
 $catResult = $catStmt->get_result();
 $catStmt->close();
@@ -165,8 +158,7 @@ if ($pay_filter === 'split') {
             ) AS cash_amount,
             MAX(ds.`Payment Mode`) AS pay_mode
         FROM daily_productsale ds
-        WHERE ds.sh_id = ?
-          AND ds.`payment status` != 'notpaid'
+        WHERE ds.`payment status` != 'notpaid'
           AND ds.Time >= ?
           AND ds.Time <= ?
           AND ds.`Payment Mode` LIKE 'split:%'
@@ -188,8 +180,7 @@ if ($pay_filter === 'split') {
         FROM daily_productsale ds
         JOIN products p  ON ds.p_id = p.p_id
         JOIN categorie c ON c.cat_id = p.categorie
-        WHERE ds.sh_id = ?
-          AND ds.`payment status` != 'notpaid'
+        WHERE ds.`payment status` != 'notpaid'
           AND ds.Time >= ?
           AND ds.Time <= ?
           $pay_where
@@ -197,7 +188,7 @@ if ($pay_filter === 'split') {
     ";
 }
 $detStmt = $conn->prepare($detailSQL);
-$detStmt->bind_param("iss", $shopId, $start_time, $end_time);
+$detStmt->bind_param("ss", $start_time, $end_time);
 $detStmt->execute();
 $detResult = $detStmt->get_result();
 $detStmt->close();
