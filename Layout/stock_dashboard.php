@@ -61,7 +61,61 @@ while ($r = mysqli_fetch_assoc($catRes)) {
     $chartRev[]  = (float)$r['revenue'];
 }
 
-// ── 4. EACH PRODUCT SOLD TODAY ────────────────────────────────────────────────
+// ── 4. HOURLY SALES TODAY (for line chart) ────────────────────────────────────
+$hourlyRes = mysqli_query($conn, "
+    SELECT
+        HOUR(Time) AS hr,
+        SUM(quantity) AS items,
+        IFNULL(SUM(quantity * `Selling Price`), 0) AS revenue
+    FROM daily_productsale
+    WHERE DATE(Time) = '$today'
+      AND `payment status` != 'notpaid'
+    GROUP BY HOUR(Time)
+    ORDER BY hr
+");
+// Build full 0–23 array, pad zeros for empty hours
+$hourlyItems = array_fill(0, 24, 0);
+$hourlyRev   = array_fill(0, 24, 0);
+while ($h = mysqli_fetch_assoc($hourlyRes)) {
+    $hourlyItems[(int)$h['hr']] = (int)$h['items'];
+    $hourlyRev[(int)$h['hr']]   = (float)$h['revenue'];
+}
+$hourLabels = [];
+for ($i = 0; $i < 24; $i++) {
+    $hourLabels[] = date('h A', mktime($i, 0, 0));
+}
+
+// ── 5. 7-DAY TREND ────────────────────────────────────────────────────────────
+$trendRes = mysqli_query($conn, "
+    SELECT
+        DATE(Time)                                        AS sale_date,
+        COUNT(DISTINCT `Inv no`)                          AS bills,
+        IFNULL(SUM(quantity), 0)                          AS items,
+        IFNULL(SUM(quantity * `Selling Price`), 0)        AS revenue
+    FROM daily_productsale
+    WHERE Time >= DATE_SUB('$today', INTERVAL 6 DAY)
+      AND `payment status` != 'notpaid'
+    GROUP BY DATE(Time)
+    ORDER BY sale_date ASC
+");
+$trendLabels  = [];
+$trendItems   = [];
+$trendRevenue = [];
+$trendBills   = [];
+// Fill all 7 days (pad missing days with 0)
+$trendMap = [];
+while ($t = mysqli_fetch_assoc($trendRes)) {
+    $trendMap[$t['sale_date']] = $t;
+}
+for ($i = 6; $i >= 0; $i--) {
+    $d = date('Y-m-d', strtotime("-$i days", strtotime($today)));
+    $trendLabels[]  = date('d M', strtotime($d));
+    $trendItems[]   = isset($trendMap[$d]) ? (int)$trendMap[$d]['items']   : 0;
+    $trendRevenue[] = isset($trendMap[$d]) ? (float)$trendMap[$d]['revenue'] : 0;
+    $trendBills[]   = isset($trendMap[$d]) ? (int)$trendMap[$d]['bills']   : 0;
+}
+
+// ── 6. EACH PRODUCT SOLD TODAY ────────────────────────────────────────────────
 $prodRes = mysqli_query($conn, "
     SELECT
         p.name,
@@ -203,6 +257,32 @@ $prodRes = mysqli_query($conn, "
     </div>
   </div>
 
+  <!-- ── LINE CHARTS ── -->
+  <div class="row g-3 mb-4">
+    <!-- Hourly sales today -->
+    <div class="col-md-6">
+      <div class="card border-0 shadow-sm rounded-4 h-100">
+        <div class="card-header text-white fw-bold" style="background:#b8860b;">
+          ⏰ Hourly Sales — Today
+        </div>
+        <div class="card-body">
+          <canvas id="hourlyChart" height="220"></canvas>
+        </div>
+      </div>
+    </div>
+    <!-- 7-day trend -->
+    <div class="col-md-6">
+      <div class="card border-0 shadow-sm rounded-4 h-100">
+        <div class="card-header text-white fw-bold" style="background:#b8860b;">
+          📈 7-Day Sales Trend
+        </div>
+        <div class="card-body">
+          <canvas id="trendChart" height="220"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── PRODUCT-LEVEL TABLE ── -->
   <div class="card border-0 shadow-sm rounded-4">
     <div class="card-header text-white fw-bold" style="background:#b8860b;">
@@ -278,6 +358,100 @@ new Chart(ctx, {
     plugins: { legend: { position: 'top' } },
     scales: {
       y:  { beginAtZero: true, title: { display: true, text: 'Items' } },
+      y2: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '₹ Revenue' } }
+    }
+  }
+});
+</script>
+
+<!-- Hourly chart -->
+<script>
+new Chart(document.getElementById('hourlyChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: <?php echo json_encode($hourLabels); ?>,
+    datasets: [
+      {
+        label: 'Items Sold',
+        data: <?php echo json_encode(array_values($hourlyItems)); ?>,
+        borderColor: '#b8860b',
+        backgroundColor: 'rgba(184,134,11,0.12)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        yAxisID: 'y',
+      },
+      {
+        label: 'Revenue (₹)',
+        data: <?php echo json_encode(array_values($hourlyRev)); ?>,
+        borderColor: '#198754',
+        backgroundColor: 'rgba(25,135,84,0.08)',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 3,
+        yAxisID: 'y2',
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      x:  { ticks: { maxTicksLimit: 8, font: { size: 10 } } },
+      y:  { beginAtZero: true, title: { display: true, text: 'Items' } },
+      y2: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '₹' } }
+    }
+  }
+});
+</script>
+
+<!-- 7-day trend chart -->
+<script>
+new Chart(document.getElementById('trendChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: <?php echo json_encode($trendLabels); ?>,
+    datasets: [
+      {
+        label: 'Items Sold',
+        data: <?php echo json_encode($trendItems); ?>,
+        borderColor: '#b8860b',
+        backgroundColor: 'rgba(184,134,11,0.12)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        yAxisID: 'y',
+      },
+      {
+        label: 'Revenue (₹)',
+        data: <?php echo json_encode($trendRevenue); ?>,
+        borderColor: '#0d6efd',
+        backgroundColor: 'rgba(13,110,253,0.08)',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        yAxisID: 'y2',
+      },
+      {
+        label: 'Bills',
+        data: <?php echo json_encode($trendBills); ?>,
+        borderColor: '#dc3545',
+        backgroundColor: 'transparent',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 4,
+        borderDash: [5, 4],
+        yAxisID: 'y',
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      y:  { beginAtZero: true, title: { display: true, text: 'Items / Bills' } },
       y2: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '₹ Revenue' } }
     }
   }
