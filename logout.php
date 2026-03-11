@@ -1,6 +1,7 @@
 <?php
 ini_set('session.gc_maxlifetime', 315360000);
 session_set_cookie_params(315360000);
+session_save_path(realpath(__DIR__ . '/sessions'));
 session_start();
 
 // Destroy all session data
