@@ -19,9 +19,11 @@ $catresult = mysqli_query($conn,
 
     <div class="d-flex justify-content-between align-items-center px-2 mb-3">
       <h5 class="mb-0 fw-bold">Products</h5>
+      <?php if (isset($_SESSION['userpermission']) && $_SESSION['userpermission'] === 'Super Admin'): ?>
       <a href="shopadmin_addproduct.php" class="btn btn-sm btn-warning">
         <i class="fa fa-plus"></i> Add Product
       </a>
+      <?php endif; ?>
     </div>
 
     <div id="printresult" class="px-2 mb-2" style="color:green;"></div>

@@ -231,11 +231,19 @@ $detStmt->close();
             <label class="form-label mb-1">Payment</label>
             <select name="pay_filter" class="form-select">
               <?php
-              $opts = [
+              $isSuperAdmin = isset($_SESSION['userpermission']) && $_SESSION['userpermission'] === 'Super Admin';
+              $opts = $isSuperAdmin ? [
+                'cash_in_hand' => '🧾 Cash in Hand',
+                'cash'         => '💵 Cash',
+                'upi'          => '📱 UPI',
+                'split'        => '✂️ Split (Cash)',
+                'online'       => '🌐 Online',
+                'staff'        => '👤 Staff',
+                'all'          => '📋 All',
+              ] : [
                 'cash_in_hand' => '🧾 Cash in Hand',
                 'cash'         => '💵 Cash',
                 'split'        => '✂️ Split (Cash)',
-                
               ];
               foreach ($opts as $val => $lbl) {
                 $sel = ($pay_filter === $val) ? 'selected' : '';
