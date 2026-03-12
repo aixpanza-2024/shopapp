@@ -1,42 +1,64 @@
 <?php
 include("web_shopadmin_header.php");
 date_default_timezone_set('Asia/Kolkata');
-$today = date('Y-m-d');
 
-// ── 1. TODAY'S SUMMARY ───────────────────────────────────────────────────────
+// --- Shop session: opens 2 PM, closes 2 AM next day ---
+$hour = (int)date('H');
+if ($hour < 2) {
+    // Before 2 AM → still in previous day's session
+    $session_date = date('Y-m-d', strtotime('-1 day'));
+} else {
+    $session_date = date('Y-m-d');
+}
+$next_date = date('Y-m-d', strtotime($session_date . ' +1 day'));
+
+$def_start = $session_date . ' 14:00';
+$def_end   = $next_date   . ' 02:00';
+
+$start_time = isset($_GET['start_time']) && $_GET['start_time'] !== ''
+    ? str_replace('T', ' ', $_GET['start_time']) : $def_start;
+$end_time   = isset($_GET['end_time'])   && $_GET['end_time']   !== ''
+    ? str_replace('T', ' ', $_GET['end_time'])   : $def_end;
+
+// Session date = calendar date of the start time (for availability queries)
+$avail_date = date('Y-m-d', strtotime($start_time));
+
+// ── 1. SUMMARY ────────────────────────────────────────────────────────────────
 $summRes = mysqli_query($conn, "
     SELECT
         COUNT(DISTINCT `Inv no`)                          AS bills,
         IFNULL(SUM(quantity), 0)                         AS items,
         IFNULL(SUM(quantity * `Selling Price`), 0)       AS revenue
     FROM daily_productsale
-    WHERE DATE(Time) = '$today'
+    WHERE Time >= '$start_time'
+      AND Time <= '$end_time'
       AND `payment status` != 'notpaid'
 ");
 $summ = mysqli_fetch_assoc($summRes);
 
-// ── 2. LOADED PRODUCTS (have daily_availability for today) ───────────────────
+// ── 2. LOADED PRODUCTS ────────────────────────────────────────────────────────
 $loadedRes = mysqli_query($conn, "
     SELECT
         p.p_id,
         p.name,
-        c.categorie     AS cat_name,
+        c.categorie      AS cat_name,
         da.available_qty AS loaded,
         IFNULL((
             SELECT SUM(ps.quantity)
             FROM daily_productsale ps
             WHERE ps.p_id = p.p_id
-              AND DATE(ps.Time) = '$today'
+              AND ps.Time >= '$start_time'
+              AND ps.Time <= '$end_time'
               AND ps.`payment status` != 'notpaid'
         ), 0) AS sold
     FROM products p
     JOIN categorie c ON c.cat_id = p.categorie
     JOIN daily_availability da ON da.product_id = p.p_id
-                               AND da.available_date = '$today'
+                               AND da.available_date = '$avail_date'
     ORDER BY c.cat_id, p.name
 ");
 
-// ── 3. SALES BY CATEGORY (for chart + table) ─────────────────────────────────
+// ── 3. SALES BY CATEGORY ──────────────────────────────────────────────────────
 $catRes = mysqli_query($conn, "
     SELECT
         c.categorie  AS cat_name,
@@ -45,12 +67,13 @@ $catRes = mysqli_query($conn, "
     FROM daily_productsale ds
     JOIN products p  ON p.p_id    = ds.p_id
     JOIN categorie c ON c.cat_id  = p.categorie
-    WHERE DATE(ds.Time) = '$today'
+    WHERE ds.Time >= '$start_time'
+      AND ds.Time <= '$end_time'
       AND ds.`payment status` != 'notpaid'
     GROUP BY c.cat_id, c.categorie
     ORDER BY qty_sold DESC
 ");
-$catRows  = [];
+$catRows   = [];
 $chartLbls = [];
 $chartQty  = [];
 $chartRev  = [];
@@ -61,61 +84,82 @@ while ($r = mysqli_fetch_assoc($catRes)) {
     $chartRev[]  = (float)$r['revenue'];
 }
 
-// ── 4. HOURLY SALES TODAY (for line chart) ────────────────────────────────────
+// ── 4. HOURLY SALES (within session range) ────────────────────────────────────
 $hourlyRes = mysqli_query($conn, "
     SELECT
         HOUR(Time) AS hr,
         SUM(quantity) AS items,
         IFNULL(SUM(quantity * `Selling Price`), 0) AS revenue
     FROM daily_productsale
-    WHERE DATE(Time) = '$today'
+    WHERE Time >= '$start_time'
+      AND Time <= '$end_time'
       AND `payment status` != 'notpaid'
     GROUP BY HOUR(Time)
     ORDER BY hr
 ");
-// Build full 0–23 array, pad zeros for empty hours
-$hourlyItems = array_fill(0, 24, 0);
-$hourlyRev   = array_fill(0, 24, 0);
+// Session hours: 14→23 then 0→2
+$sessionHours = array_merge(range(14, 23), range(0, 2));
+$hourlyItems  = array_fill_keys($sessionHours, 0);
+$hourlyRev    = array_fill_keys($sessionHours, 0);
 while ($h = mysqli_fetch_assoc($hourlyRes)) {
-    $hourlyItems[(int)$h['hr']] = (int)$h['items'];
-    $hourlyRev[(int)$h['hr']]   = (float)$h['revenue'];
+    $hr = (int)$h['hr'];
+    if (isset($hourlyItems[$hr])) {
+        $hourlyItems[$hr] = (int)$h['items'];
+        $hourlyRev[$hr]   = (float)$h['revenue'];
+    }
 }
 $hourLabels = [];
-for ($i = 0; $i < 24; $i++) {
-    $hourLabels[] = date('h A', mktime($i, 0, 0));
+foreach ($sessionHours as $hr) {
+    $hourLabels[] = date('h A', mktime($hr, 0, 0));
 }
 
-// ── 5. 7-DAY TREND ────────────────────────────────────────────────────────────
-$trendRes = mysqli_query($conn, "
+// ── 5. 7-SESSION TREND (last 7 shop sessions) ─────────────────────────────────
+$trendRows = [];
+for ($i = 6; $i >= 0; $i--) {
+    $s_date  = date('Y-m-d', strtotime("-$i days", strtotime($session_date)));
+    $s_start = $s_date . ' 14:00:00';
+    $s_end   = date('Y-m-d', strtotime($s_date . ' +1 day')) . ' 02:00:00';
+    $trendRows[$s_date] = ['label' => date('d M', strtotime($s_date)), 'start' => $s_start, 'end' => $s_end];
+}
+$trendPlaceholders = implode(',', array_fill(0, 7, "?"));
+$trendStmt = $conn->prepare("
     SELECT
         DATE(Time)                                        AS sale_date,
         COUNT(DISTINCT `Inv no`)                          AS bills,
         IFNULL(SUM(quantity), 0)                          AS items,
         IFNULL(SUM(quantity * `Selling Price`), 0)        AS revenue
     FROM daily_productsale
-    WHERE Time >= DATE_SUB('$today', INTERVAL 6 DAY)
-      AND `payment status` != 'notpaid'
+    WHERE `payment status` != 'notpaid'
+      AND (
+" . implode(' OR ', array_fill(0, 7, "(Time >= ? AND Time <= ?)")) . "
+      )
     GROUP BY DATE(Time)
-    ORDER BY sale_date ASC
 ");
+$bindArgs = [];
+foreach ($trendRows as $d => $tr) {
+    $bindArgs[] = $tr['start'];
+    $bindArgs[] = $tr['end'];
+}
+$types = str_repeat('ss', 7);
+$trendStmt->bind_param($types, ...$bindArgs);
+$trendStmt->execute();
+$trendRes2 = $trendStmt->get_result();
+$trendMap  = [];
+while ($t = mysqli_fetch_assoc($trendRes2)) $trendMap[$t['sale_date']] = $t;
+$trendStmt->close();
+
 $trendLabels  = [];
 $trendItems   = [];
 $trendRevenue = [];
 $trendBills   = [];
-// Fill all 7 days (pad missing days with 0)
-$trendMap = [];
-while ($t = mysqli_fetch_assoc($trendRes)) {
-    $trendMap[$t['sale_date']] = $t;
-}
-for ($i = 6; $i >= 0; $i--) {
-    $d = date('Y-m-d', strtotime("-$i days", strtotime($today)));
-    $trendLabels[]  = date('d M', strtotime($d));
-    $trendItems[]   = isset($trendMap[$d]) ? (int)$trendMap[$d]['items']   : 0;
-    $trendRevenue[] = isset($trendMap[$d]) ? (float)$trendMap[$d]['revenue'] : 0;
-    $trendBills[]   = isset($trendMap[$d]) ? (int)$trendMap[$d]['bills']   : 0;
+foreach ($trendRows as $s_date => $tr) {
+    $trendLabels[]  = $tr['label'];
+    $trendItems[]   = isset($trendMap[$s_date]) ? (int)$trendMap[$s_date]['items']   : 0;
+    $trendRevenue[] = isset($trendMap[$s_date]) ? (float)$trendMap[$s_date]['revenue'] : 0;
+    $trendBills[]   = isset($trendMap[$s_date]) ? (int)$trendMap[$s_date]['bills']   : 0;
 }
 
-// ── 6. EACH PRODUCT SOLD TODAY ────────────────────────────────────────────────
+// ── 6. PRODUCT-LEVEL SALES ────────────────────────────────────────────────────
 $prodRes = mysqli_query($conn, "
     SELECT
         p.name,
@@ -125,7 +169,8 @@ $prodRes = mysqli_query($conn, "
     FROM daily_productsale ds
     JOIN products p  ON p.p_id   = ds.p_id
     JOIN categorie c ON c.cat_id = p.categorie
-    WHERE DATE(ds.Time) = '$today'
+    WHERE ds.Time >= '$start_time'
+      AND ds.Time <= '$end_time'
       AND ds.`payment status` != 'notpaid'
     GROUP BY ds.p_id
     ORDER BY qty_sold DESC
@@ -151,13 +196,34 @@ $prodRes = mysqli_query($conn, "
 
 <div class="container-fluid py-3">
 
+  <!-- ── DATE-TIME FILTER ── -->
+  <div class="card shadow-sm border-0 rounded-4 mb-3">
+    <div class="card-body">
+      <form method="GET" action="stock_dashboard.php" class="row g-2 align-items-end">
+        <div class="col-md-5 col-6">
+          <label class="form-label mb-1">From</label>
+          <input type="datetime-local" name="start_time" class="form-control"
+            value="<?php echo htmlspecialchars(str_replace(' ', 'T', $start_time)); ?>">
+        </div>
+        <div class="col-md-5 col-6">
+          <label class="form-label mb-1">To</label>
+          <input type="datetime-local" name="end_time" class="form-control"
+            value="<?php echo htmlspecialchars(str_replace(' ', 'T', $end_time)); ?>">
+        </div>
+        <div class="col-md-2 col-12">
+          <button type="submit" class="btn btn-warning text-white w-100">Apply</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- ── SUMMARY CARDS ── -->
   <div class="row g-3 mb-4">
     <div class="col-4">
       <div class="card border-0 shadow-sm rounded-4 text-center h-100">
         <div class="card-body py-3">
           <div style="font-size:1.8rem;font-weight:700;color:#b8860b;"><?php echo intval($summ['bills']); ?></div>
-          <div class="text-muted small">Bills Today</div>
+          <div class="text-muted small">Bills</div>
         </div>
       </div>
     </div>
@@ -183,7 +249,7 @@ $prodRes = mysqli_query($conn, "
   <?php if (mysqli_num_rows($loadedRes) > 0): ?>
   <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-header text-white fw-bold" style="background:#b8860b;">
-      📦 Loaded Today — Stock Status
+      📦 Loaded Stock — Status
     </div>
     <div class="card-body p-3">
       <?php while ($row = mysqli_fetch_assoc($loadedRes)):
@@ -248,7 +314,7 @@ $prodRes = mysqli_query($conn, "
               </tr>
               <?php endforeach; ?>
               <?php if (empty($catRows)): ?>
-              <tr><td colspan="3" class="text-muted py-3">No sales yet today.</td></tr>
+              <tr><td colspan="3" class="text-muted py-3">No sales in this period.</td></tr>
               <?php endif; ?>
             </tbody>
           </table>
@@ -259,22 +325,20 @@ $prodRes = mysqli_query($conn, "
 
   <!-- ── LINE CHARTS ── -->
   <div class="row g-3 mb-4">
-    <!-- Hourly sales today -->
     <div class="col-md-6">
       <div class="card border-0 shadow-sm rounded-4 h-100">
         <div class="card-header text-white fw-bold" style="background:#b8860b;">
-          ⏰ Hourly Sales — Today
+          ⏰ Hourly Sales
         </div>
         <div class="card-body">
           <canvas id="hourlyChart" height="220"></canvas>
         </div>
       </div>
     </div>
-    <!-- 7-day trend -->
     <div class="col-md-6">
       <div class="card border-0 shadow-sm rounded-4 h-100">
         <div class="card-header text-white fw-bold" style="background:#b8860b;">
-          📈 7-Day Sales Trend
+          📈 7-Session Trend
         </div>
         <div class="card-body">
           <canvas id="trendChart" height="220"></canvas>
@@ -286,7 +350,7 @@ $prodRes = mysqli_query($conn, "
   <!-- ── PRODUCT-LEVEL TABLE ── -->
   <div class="card border-0 shadow-sm rounded-4">
     <div class="card-header text-white fw-bold" style="background:#b8860b;">
-      🧾 Product-Level Sales Today
+      🧾 Product-Level Sales
     </div>
     <div class="card-body table-responsive p-0">
       <table class="table table-striped table-bordered align-middle text-center mb-0" style="font-size:0.85rem;">
@@ -308,7 +372,7 @@ $prodRes = mysqli_query($conn, "
           </tr>
           <?php endwhile; ?>
           <?php if ($grandQty === 0): ?>
-          <tr><td colspan="4" class="text-muted py-3">No sales yet today.</td></tr>
+          <tr><td colspan="4" class="text-muted py-3">No sales in this period.</td></tr>
           <?php else: ?>
           <tr class="table-warning fw-bold">
             <td colspan="2">Total</td>
@@ -327,8 +391,7 @@ $prodRes = mysqli_query($conn, "
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-const ctx = document.getElementById('catChart').getContext('2d');
-new Chart(ctx, {
+new Chart(document.getElementById('catChart').getContext('2d'), {
   type: 'bar',
   data: {
     labels: <?php echo json_encode($chartLbls); ?>,
@@ -364,7 +427,6 @@ new Chart(ctx, {
 });
 </script>
 
-<!-- Hourly chart -->
 <script>
 new Chart(document.getElementById('hourlyChart').getContext('2d'), {
   type: 'line',
@@ -405,7 +467,6 @@ new Chart(document.getElementById('hourlyChart').getContext('2d'), {
 });
 </script>
 
-<!-- 7-day trend chart -->
 <script>
 new Chart(document.getElementById('trendChart').getContext('2d'), {
   type: 'line',

@@ -2,9 +2,16 @@
 include("web_shopadmin_header.php");
 date_default_timezone_set('Asia/Kolkata');
 
-// --- Default time range: full current day ---
-$def_start = date('Y-m-d') . ' 00:00';
-$def_end   = date('Y-m-d') . ' 23:59';
+// --- Default time range: shop session 2 PM → 2 AM next day ---
+$hour = (int)date('H');
+if ($hour < 2) {
+    // Before 2 AM → still in previous day's session
+    $session_date = date('Y-m-d', strtotime('-1 day'));
+} else {
+    $session_date = date('Y-m-d');
+}
+$def_start = $session_date . ' 14:00';
+$def_end   = date('Y-m-d', strtotime($session_date . ' +1 day')) . ' 02:00';
 
 $start_time = isset($_GET['start_time']) && $_GET['start_time'] !== '' ? $_GET['start_time'] : $def_start;
 $end_time   = isset($_GET['end_time'])   && $_GET['end_time']   !== '' ? $_GET['end_time']   : $def_end;
@@ -192,6 +199,39 @@ $detStmt->bind_param("ss", $start_time, $end_time);
 $detStmt->execute();
 $detResult = $detStmt->get_result();
 $detStmt->close();
+
+// --- Snacks: stock left to sell (always today) ---
+$snacksRes = mysqli_query($conn, "
+    SELECT
+        p.name,
+        IFNULL(da_today.available_qty, 0)    AS loaded_today,
+        IFNULL(da_prev.old_qty, 0)           AS old_stock,
+        IFNULL(sold.qty_sold, 0)             AS sold
+    FROM products p
+    JOIN categorie c ON c.cat_id = p.categorie AND LOWER(c.categorie) LIKE '%snack%'
+    LEFT JOIN daily_availability da_today
+        ON da_today.product_id = p.p_id AND da_today.available_date = CURDATE()
+    LEFT JOIN (
+        SELECT da2.product_id, da2.available_qty AS old_qty
+        FROM daily_availability da2
+        INNER JOIN (
+            SELECT product_id, MAX(available_date) AS max_date
+            FROM daily_availability
+            WHERE available_date < CURDATE()
+            GROUP BY product_id
+        ) latest ON latest.product_id = da2.product_id AND latest.max_date = da2.available_date
+    ) da_prev ON da_prev.product_id = p.p_id AND da_today.available_qty IS NULL
+    LEFT JOIN (
+        SELECT p_id, SUM(quantity) AS qty_sold
+        FROM daily_productsale
+        WHERE DATE(Time) = CURDATE() AND `payment status` != 'notpaid'
+        GROUP BY p_id
+    ) sold ON sold.p_id = p.p_id
+    WHERE (da_today.available_qty IS NOT NULL OR da_prev.old_qty IS NOT NULL)
+    ORDER BY p.name
+");
+$snackRows = [];
+while ($r = mysqli_fetch_assoc($snacksRes)) $snackRows[] = $r;
 ?>
 
 <main>
@@ -337,6 +377,20 @@ $detStmt->close();
       </div>
     </div>
 
+    <!-- Snacks Stock Chart -->
+    <div class="card shadow-sm border-0 rounded-4 mb-3">
+      <div class="card-header text-white" style="background:#b8860b;">
+        <strong>Snacks — Items Left to Sell</strong>
+      </div>
+      <div class="card-body">
+        <?php if (empty($snackRows)): ?>
+        <p class="text-muted text-center mb-0">No snack stock loaded today.</p>
+        <?php else: ?>
+        <canvas id="snacksChart" style="max-height:320px;"></canvas>
+        <?php endif; ?>
+      </div>
+    </div>
+
     <!-- Item Detail Table -->
     <div class="card shadow-sm border-0 rounded-4">
       <div class="card-header text-white" style="background:#b8860b;">
@@ -429,3 +483,36 @@ $detStmt->close();
   table { font-size: 0.78rem; }
 }
 </style>
+
+<?php if (!empty($snackRows)): ?>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  const rows   = <?php echo json_encode($snackRows); ?>;
+  const labels = rows.map(r => r.name);
+  const loaded = rows.map(r => parseInt(r.loaded_today));
+  const oldStk = rows.map(r => parseInt(r.old_stock));
+  const sold   = rows.map(r => parseInt(r.sold));
+  const left   = rows.map((r, i) => Math.max(0, loaded[i] + oldStk[i] - sold[i]));
+
+  new Chart(document.getElementById('snacksChart'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Loaded Today', data: loaded, backgroundColor: '#4a90d9' },
+        { label: 'Old Stock',    data: oldStk,  backgroundColor: '#adb5bd' },
+        { label: 'Sold',         data: sold,    backgroundColor: '#b8860b' },
+        { label: 'Left',         data: left,    backgroundColor: '#28a745' },
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: { legend: { position: 'bottom' } },
+      scales: { x: { beginAtZero: true } }
+    }
+  });
+})();
+</script>
+<?php endif; ?>

@@ -5,7 +5,9 @@
   <a href="../Layout/shopexpense.php">Add Expense</a>
   <a href="../Layout/shop_listexpense.php">List Expense</a>
   <a href="../Layout/daily_sales.php">Daily Sales</a>
+  <?php if (isset($_SESSION['userpermission']) && $_SESSION['userpermission'] === 'Super Admin'): ?>
   <a href="../Layout/stock_dashboard.php">Stock Dashboard</a>
+  <?php endif; ?>
   <a href="../Adminpanel/index.php">Customer</a>
   <a href="../Adminpanel/index.php">Expense</a>
   <a href="#">Profile</a>
