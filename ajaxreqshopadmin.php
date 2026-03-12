@@ -24,16 +24,14 @@ date_default_timezone_set('Asia/Kolkata');
 
     if ($check->num_rows > 0) {
         // record exists → UPDATE
-        $check->bind_result($rowId);
-        $check->fetch();
         $check->close();
 
         $update = $conn->prepare("
-            UPDATE daily_availability 
-            SET available_qty = ?, updated_at = ? 
-            WHERE product_id = ?
+            UPDATE daily_availability
+            SET available_qty = ?, updated_at = ?
+            WHERE product_id = ? AND available_date = ?
         ");
-        $update->bind_param("isi", $quantity, $updated_at, $rowId);
+        $update->bind_param("isis", $quantity, $updated_at, $prodid, $date);
         if ($update->execute()) {
 
 
