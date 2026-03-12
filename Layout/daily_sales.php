@@ -200,33 +200,50 @@ $detStmt->execute();
 $detResult = $detStmt->get_result();
 $detStmt->close();
 
-// --- Snacks: stock left to sell (always today) ---
+// --- Snacks: stock left to sell (current session date) ---
+// Auto-create wastage table in case stock_dashboard hasn't been visited yet
+mysqli_query($conn, "
+    CREATE TABLE IF NOT EXISTS daily_wastage (
+        id INT AUTO_INCREMENT PRIMARY KEY, product_id INT NOT NULL,
+        prod_name VARCHAR(255) NOT NULL, wastage_qty INT NOT NULL DEFAULT 0,
+        reason ENUM('unsold','damaged','other') NOT NULL DEFAULT 'unsold',
+        notes VARCHAR(500) DEFAULT NULL, wastage_date DATE NOT NULL, created_at DATETIME NOT NULL
+    )
+");
 $snacksRes = mysqli_query($conn, "
     SELECT
         p.name,
         IFNULL(da_today.available_qty, 0)    AS loaded_today,
         IFNULL(da_prev.old_qty, 0)           AS old_stock,
-        IFNULL(sold.qty_sold, 0)             AS sold
+        IFNULL(sold.qty_sold, 0)             AS sold,
+        IFNULL(wasted.wastage_qty, 0)        AS wasted
     FROM products p
     JOIN categorie c ON c.cat_id = p.categorie AND LOWER(c.categorie) LIKE '%snack%'
     LEFT JOIN daily_availability da_today
-        ON da_today.product_id = p.p_id AND da_today.available_date = CURDATE()
+        ON da_today.product_id = p.p_id AND da_today.available_date = '$session_date'
     LEFT JOIN (
         SELECT da2.product_id, da2.available_qty AS old_qty
         FROM daily_availability da2
         INNER JOIN (
             SELECT product_id, MAX(available_date) AS max_date
             FROM daily_availability
-            WHERE available_date < CURDATE()
+            WHERE available_date < '$session_date'
             GROUP BY product_id
         ) latest ON latest.product_id = da2.product_id AND latest.max_date = da2.available_date
     ) da_prev ON da_prev.product_id = p.p_id AND da_today.available_qty IS NULL
     LEFT JOIN (
         SELECT p_id, SUM(quantity) AS qty_sold
         FROM daily_productsale
-        WHERE DATE(Time) = CURDATE() AND `payment status` != 'notpaid'
+        WHERE Time >= '$def_start' AND Time <= '$def_end'
+          AND `payment status` != 'notpaid'
         GROUP BY p_id
     ) sold ON sold.p_id = p.p_id
+    LEFT JOIN (
+        SELECT product_id, SUM(wastage_qty) AS wastage_qty
+        FROM daily_wastage
+        WHERE wastage_date = '$session_date'
+        GROUP BY product_id
+    ) wasted ON wasted.product_id = p.p_id
     WHERE (da_today.available_qty IS NOT NULL OR da_prev.old_qty IS NOT NULL)
     ORDER BY p.name
 ");
@@ -493,7 +510,8 @@ while ($r = mysqli_fetch_assoc($snacksRes)) $snackRows[] = $r;
   const loaded = rows.map(r => parseInt(r.loaded_today));
   const oldStk = rows.map(r => parseInt(r.old_stock));
   const sold   = rows.map(r => parseInt(r.sold));
-  const left   = rows.map((r, i) => Math.max(0, loaded[i] + oldStk[i] - sold[i]));
+  const wasted = rows.map(r => parseInt(r.wasted));
+  const left   = rows.map((r, i) => Math.max(0, loaded[i] + oldStk[i] - sold[i] - wasted[i]));
 
   new Chart(document.getElementById('snacksChart'), {
     type: 'bar',
@@ -503,6 +521,7 @@ while ($r = mysqli_fetch_assoc($snacksRes)) $snackRows[] = $r;
         { label: 'Loaded Today', data: loaded, backgroundColor: '#4a90d9' },
         { label: 'Old Stock',    data: oldStk,  backgroundColor: '#adb5bd' },
         { label: 'Sold',         data: sold,    backgroundColor: '#b8860b' },
+        { label: 'Wasted',       data: wasted,  backgroundColor: '#dc3545' },
         { label: 'Left',         data: left,    backgroundColor: '#28a745' },
       ]
     },
