@@ -26,9 +26,15 @@ if ($action === 'log') {
     $reason     = in_array($_GET['reason'] ?? '', ['unsold','damaged','other']) ? $_GET['reason'] : 'unsold';
     $notes      = substr(trim($_GET['notes'] ?? ''), 0, 500);
     $prod_name  = substr(trim($_GET['prod_name'] ?? ''), 0, 255);
-    // Match the shop session logic: before 2 AM belongs to the previous day's session
-    $hour = (int)date('H');
-    $date = $hour < 2 ? date('Y-m-d', strtotime('-1 day')) : date('Y-m-d');
+    // Use the session date passed from the dashboard (handles custom filters and past sessions).
+    // Fall back to clock-based session logic if not provided.
+    $passed = $_GET['avail_date'] ?? '';
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $passed)) {
+        $date = $passed;
+    } else {
+        $hour = (int)date('H');
+        $date = $hour < 2 ? date('Y-m-d', strtotime('-1 day')) : date('Y-m-d');
+    }
     $now  = date('Y-m-d H:i:s');
 
     if ($qty <= 0 || $product_id <= 0) {

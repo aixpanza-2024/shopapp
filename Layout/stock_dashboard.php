@@ -578,6 +578,8 @@ new Chart(document.getElementById('trendChart').getContext('2d'), {
 
 <!-- Wastage JS -->
 <script>
+const AVAIL_DATE = <?php echo json_encode($avail_date); ?>;
+
 function openWastageModal(pid, pname) {
   document.getElementById('w_product_id').value = pid;
   document.getElementById('w_prod_name').value  = pname;
@@ -604,7 +606,7 @@ function submitWastage() {
   }
   errEl.classList.add('d-none');
 
-  fetch(`../wastage_handler.php?action=log&product_id=${pid}&prod_name=${encodeURIComponent(pname)}&qty=${qty}&reason=${reason}&notes=${encodeURIComponent(notes)}`)
+  fetch(`../wastage_handler.php?action=log&product_id=${pid}&prod_name=${encodeURIComponent(pname)}&qty=${qty}&reason=${reason}&notes=${encodeURIComponent(notes)}&avail_date=${encodeURIComponent(AVAIL_DATE)}`)
     .then(r => r.json())
     .then(d => {
       if (d.ok) {
