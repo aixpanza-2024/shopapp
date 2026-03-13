@@ -1,202 +1,410 @@
 <?php
 include("web_shopadmin_header.php");
 
-// Handle form submission
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-// your DB connection file
+// Auto-create tables
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS shop_daily_opening (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    opening_date DATE NOT NULL,
+    amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    notes VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_date (opening_date)
+)");
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS shop_savings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    savings_type VARCHAR(100) NOT NULL DEFAULT 'Chitty',
+    amount DECIMAL(10,2) NOT NULL,
+    notes VARCHAR(255) DEFAULT NULL,
+    savings_date DATE NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_deleted TINYINT(1) NOT NULL DEFAULT 0
+)");
 
-  $expense_name = $_POST['expense_name'];
-  $expense_amount = $_POST['expense_amount'];
-  $expense_qty = $_POST['expense_qty'];
-  $expense_category = $_POST['expense_category'];
-  $expense_note = $_POST['expense_note'];
-  $expense_date = date("Y-m-d"); // Automatically set current date
+date_default_timezone_set('Asia/Kolkata');
+$today = date('Y-m-d');
 
-  $sql = "INSERT INTO shop_expenses (expense_name, expense_amount, expense_qty, expense_date, expense_category, expense_note) 
-          VALUES ('$expense_name', '$expense_amount', '$expense_qty', '$expense_date', '$expense_category', '$expense_note')";
-  
-  if (mysqli_query($conn, $sql)) {
-    echo "<script>alert('Expense added successfully!');</script>";
-  } else {
-    echo "<script>alert('Error adding expense: " . mysqli_error($conn) . "');</script>";
-  }
-
-  mysqli_close($conn);
+// Handle opening balance
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 'opening_balance') {
+    $amount = floatval($_POST['ob_amount']);
+    $notes  = mysqli_real_escape_string($conn, trim($_POST['ob_notes'] ?? ''));
+    mysqli_query($conn, "INSERT INTO shop_daily_opening (opening_date, amount, notes)
+        VALUES ('$today', $amount, '$notes')
+        ON DUPLICATE KEY UPDATE amount=$amount, notes='$notes'");
+    echo "<script>alert('Opening balance saved!'); window.location='shopexpense.php';</script>";
+    exit;
 }
+
+// Handle savings
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 'savings') {
+    $type   = mysqli_real_escape_string($conn, trim($_POST['savings_type']));
+    $amount = floatval($_POST['savings_amount']);
+    $notes  = mysqli_real_escape_string($conn, trim($_POST['savings_notes'] ?? ''));
+    mysqli_query($conn, "INSERT INTO shop_savings (savings_type, amount, notes, savings_date)
+        VALUES ('$type', $amount, '$notes', '$today')");
+    echo "<script>alert('Savings recorded!'); window.location='shopexpense.php';</script>";
+    exit;
+}
+
+// Handle expense
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 'expense') {
+    $expense_name     = mysqli_real_escape_string($conn, trim($_POST['expense_name']));
+    $expense_amount   = floatval($_POST['expense_amount']);
+    $expense_qty      = max(1, intval($_POST['expense_qty']));
+    $expense_category = mysqli_real_escape_string($conn, $_POST['expense_category']);
+    $expense_note     = mysqli_real_escape_string($conn, trim($_POST['expense_note'] ?? ''));
+    $sql = "INSERT INTO shop_expenses (expense_name, expense_amount, expense_qty, expense_date, expense_category, expense_note)
+            VALUES ('$expense_name', $expense_amount, $expense_qty, '$today', '$expense_category', '$expense_note')";
+    if (mysqli_query($conn, $sql)) {
+        echo "<script>alert('Expense added!'); window.location='shopexpense.php';</script>";
+    } else {
+        echo "<script>alert('Error: " . mysqli_error($conn) . "');</script>";
+    }
+    exit;
+}
+
+// Today's opening balance
+$ob_row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM shop_daily_opening WHERE opening_date='$today'"));
+
+// Past expense names for autocomplete (from DB)
+$pastNamesRes = mysqli_query($conn, "SELECT DISTINCT expense_name FROM shop_expenses WHERE is_deleted=0 ORDER BY expense_name");
+$pastNames = [];
+while ($r = mysqli_fetch_assoc($pastNamesRes)) $pastNames[] = $r['expense_name'];
+
+// Today's totals summary
+$todayExpRow   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(expense_amount * expense_qty),0) AS total FROM shop_expenses WHERE expense_date='$today' AND is_deleted=0"));
+$todaySavRow   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(amount),0) AS total FROM shop_savings WHERE savings_date='$today' AND is_deleted=0"));
 ?>
 
 <main>
-
-  <!-- Header -->
-  <nav class="navbar navbar-expand-lg navbar-light" style="background-color: #b8860b !important;">
+  <nav class="navbar navbar-expand-lg navbar-light" style="background-color:#b8860b !important;">
     <div class="container-fluid d-flex flex-wrap align-items-center justify-content-between">
       <div class="d-flex align-items-center">
-        <img src="../images/logo.jpg" alt="Logo" class="img-fluid" style="max-height: 50px;">
-        <h5 class="ms-3 text-white">Add Expense</h5>
+        <img src="../images/logo.jpg" alt="Logo" class="img-fluid" style="max-height:50px;">
+        <h5 class="ms-3 text-white mb-0">Daily Finance</h5>
       </div>
-
-      <div class="d-flex align-items-center">
-        <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#myModal">
-          <i class="fa fa-language"></i>
-        </button>
+      <div class="d-flex align-items-center gap-2">
+        <a href="shop_listexpense.php" class="btn btn-outline-light btn-sm">📋 View Expenses</a>
         <?php include_once("../master_mobnav.php"); ?>
       </div>
     </div>
   </nav>
 
-  <!-- Expense Form -->
-  <div class="container py-4">
-    <div class="card shadow-lg border-0 rounded-4">
-      <div class="card-header text-white" style="background-color:#b8860b;">
-        <h5 class="mb-0">Add New Expense</h5>
-      </div>
+  <div class="container py-3">
 
-      <div class="card-body">
-        <form method="POST" action="">
-          <div class="row g-3">
-
-            <!-- Expense Name with Datalist -->
-           <!-- Expense Name with Datalist -->
-<div class="col-md-6">
-  <label for="expense_name" class="form-label">Expense Name</label>
-  <input list="expenseOptions" class="form-control form-select-lg" id="expense_name" name="expense_name" required placeholder="Select or type">
-  <datalist id="expenseOptions">
-    <!-- General Items -->
-    <option value="Milk">
-    <option value="Tea Powder">
-    <option value="Sugar">
-    <option value="Gas Cylinder">
-    <option value="Snacks Purchase">
-    <option value="Cleaning Items">
-    <option value="Staff Salary">
-    <option value="Electricity Bill">
-    <option value="Rent">
-    <option value="Water">
-    <option value="Soda">
-    <option value="Ice Purchase">
-    <option value="Bread">
-    <option value="Bun">
-    <option value="Paper Cups">
-    <option value="Auto">
-    <option value="Miscellaneous">
-
-    <!-- Vegetables -->
-    <option value="Tomato">
-    <option value="Onion">
-    <option value="Potato">
-    <option value="Capsicum">
-    <option value="Cabbage">
-    <option value="Cauliflower">
-    <option value="Carrot">
-    <option value="Beans">
-    <option value="Green Chilli">
-    <option value="Coriander Leaves">
-    <option value="Curry Leaves">
-    <option value="Ginger">
-    <option value="Garlic">
-    <option value="Beetroot">
-    <option value="Spinach">
-    <option value="Drumstick">
-    <option value="Ladies Finger">
-    <option value="Cucumber">
-    <option value="Bottle Gourd">
-    <option value="Pumpkin">
-
-    <!-- Fruits -->
-    <option value="Pineapple">
-    <option value="Banana">
-    <option value="Apple">
-    <option value="Orange">
-    <option value="Watermelon">
-    <option value="Papaya">
-    <option value="Mango">
-    <option value="Lemon">
-    <option value="Grapes">
-    <option value="Pomegranate">
-    <option value="Coconut">
-    <option value="Tender Coconut">
-  </datalist>
-  </div>
-
-            <div class="col-md-3">
-              <label for="expense_amount" class="form-label">Amount (₹)</label>
-              <input type="number" class="form-control" id="expense_amount" name="expense_amount" required step="0.01" placeholder="0.00">
-            </div>
-
-            <div class="col-md-3">
-              <label for="expense_qty" class="form-label">Quantity</label>
-              <input type="number" class="form-control" id="expense_qty" name="expense_qty" required step="1" min="1" value="1">
-            </div>
-
-            <input type="hidden" name="expense_date" value="<?php echo date('Y-m-d'); ?>">
-
-            <div class="col-md-6">
-              <label for="expense_category" class="form-label">Category</label>
-              <select class="form-select form-select-lg" id="expense_category" name="expense_category">
-                <option value="">Select Category</option>
-                <option value="Raw Materials">Raw Materials</option>
-                <option value="Staff Salary">Staff Salary</option>
-                <option value="Maintenance">Maintenance</option>
-                <option value="Utilities">Utilities</option>
-                <option value="Miscellaneous">Miscellaneous</option>
-              </select>
-            </div>
-
-            <div class="col-12">
-              <label for="expense_note" class="form-label">Notes (optional)</label>
-              <textarea class="form-control" id="expense_note" name="expense_note" rows="3" placeholder="Add any remarks"></textarea>
-            </div>
-
+    <!-- Today's Summary Row -->
+    <div class="row g-2 mb-3">
+      <div class="col-4">
+        <div class="card border-0 shadow-sm rounded-3 text-center py-2">
+          <div class="text-muted" style="font-size:0.72rem;">Opening Balance</div>
+          <div class="fw-bold fs-6 <?php echo $ob_row ? 'text-success' : 'text-warning'; ?>">
+            <?php echo $ob_row ? '₹' . number_format($ob_row['amount'], 2) : '—'; ?>
           </div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card border-0 shadow-sm rounded-3 text-center py-2">
+          <div class="text-muted" style="font-size:0.72rem;">Expenses Today</div>
+          <div class="fw-bold fs-6 text-danger">₹<?php echo number_format($todayExpRow['total'], 2); ?></div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card border-0 shadow-sm rounded-3 text-center py-2">
+          <div class="text-muted" style="font-size:0.72rem;">Savings Today</div>
+          <div class="fw-bold fs-6 text-primary">₹<?php echo number_format($todaySavRow['total'], 2); ?></div>
+        </div>
+      </div>
+    </div>
 
-          <div class="text-center mt-4">
-            <button type="submit" class="btn btn-success px-5 fs-5">💾 Save Expense</button>
+    <!-- Opening Balance Card -->
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-header fw-bold text-white d-flex justify-content-between align-items-center"
+           style="background:#5a7a3a;">
+        <span>💰 Opening Balance</span>
+        <small class="opacity-75"><?php echo $today; ?></small>
+      </div>
+      <div class="card-body py-3">
+        <?php if ($ob_row): ?>
+        <div class="alert alert-success py-2 mb-2 d-flex justify-content-between align-items-center">
+          <span>Today's balance: <strong>₹<?php echo number_format($ob_row['amount'], 2); ?></strong>
+            <?php if ($ob_row['notes']) echo ' — <em>' . htmlspecialchars($ob_row['notes']) . '</em>'; ?>
+          </span>
+          <small class="text-muted">tap below to update</small>
+        </div>
+        <?php endif; ?>
+        <form method="POST">
+          <input type="hidden" name="form_type" value="opening_balance">
+          <div class="row g-2 align-items-end">
+            <div class="col-5 col-md-4">
+              <label class="form-label mb-1 small">Amount (₹)</label>
+              <input type="number" name="ob_amount" class="form-control"
+                     value="<?php echo $ob_row ? htmlspecialchars($ob_row['amount']) : ''; ?>"
+                     placeholder="0.00" step="0.01" min="0" required>
+            </div>
+            <div class="col-5 col-md-6">
+              <label class="form-label mb-1 small">Notes (optional)</label>
+              <input type="text" name="ob_notes" class="form-control"
+                     value="<?php echo $ob_row ? htmlspecialchars($ob_row['notes'] ?? '') : ''; ?>"
+                     placeholder="e.g. from safe, previous day">
+            </div>
+            <div class="col-2 col-md-2">
+              <button type="submit" class="btn btn-success w-100">
+                <?php echo $ob_row ? '✏️' : '💾'; ?>
+              </button>
+            </div>
           </div>
         </form>
       </div>
     </div>
-  </div>
 
-  <!-- Language Modal -->
-  <div class="modal fade" id="myModal" tabindex="-1" aria-labelledby="myModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
+    <!-- Expense Card -->
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-header fw-bold text-white" style="background:#b8860b;">
+        📤 Add Expense
+      </div>
+      <div class="card-body py-3">
+        <form method="POST" autocomplete="off">
+          <input type="hidden" name="form_type" value="expense">
+          <div class="row g-2">
 
-        <div class="modal-header">
-          <h5 class="modal-title" id="myModalLabel">Qalb Chai Language Settings</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
+            <!-- Expense name with custom autocomplete -->
+            <div class="col-12">
+              <label class="form-label mb-1 small">Expense Name</label>
+              <div class="expense-autocomplete">
+                <input type="text" id="expense_name" name="expense_name" class="form-control"
+                       placeholder="Type to search..." required autocomplete="off">
+                <div id="expense_dropdown"></div>
+              </div>
+            </div>
 
-        <div class="modal-body">
-          <div id="google_translate_element"></div> 
-        </div>
+            <div class="col-6 col-md-4">
+              <label class="form-label mb-1 small">Amount (₹)</label>
+              <input type="number" name="expense_amount" class="form-control"
+                     placeholder="0.00" step="0.01" min="0" required>
+            </div>
+
+            <div class="col-6 col-md-2">
+              <label class="form-label mb-1 small">Qty</label>
+              <input type="number" name="expense_qty" class="form-control"
+                     value="1" min="1" step="1" required>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label mb-1 small">Category</label>
+              <select name="expense_category" class="form-select">
+                <option value="">Select Category</option>
+                <?php foreach (['Raw Materials','Staff Salary','Maintenance','Utilities','Miscellaneous'] as $cat): ?>
+                <option value="<?php echo $cat; ?>"><?php echo $cat; ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label mb-1 small">Notes (optional)</label>
+              <input type="text" name="expense_note" class="form-control" placeholder="Add any remarks">
+            </div>
+          </div>
+          <div class="mt-3">
+            <button type="submit" class="btn btn-warning text-white px-4 fw-semibold">💾 Save Expense</button>
+          </div>
+        </form>
       </div>
     </div>
-  </div>
 
+    <!-- Savings Card -->
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-header fw-bold text-white" style="background:#1a6496;">
+        🏦 Record Savings
+      </div>
+      <div class="card-body py-3">
+        <form method="POST">
+          <input type="hidden" name="form_type" value="savings">
+          <div class="row g-2 align-items-end">
+            <div class="col-6 col-md-3">
+              <label class="form-label mb-1 small">Type</label>
+              <select name="savings_type" class="form-select" required>
+                <option value="Chitty">Chitty</option>
+                <option value="Fixed Deposit">Fixed Deposit</option>
+                <option value="Personal">Personal</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label mb-1 small">Amount (₹)</label>
+              <input type="number" name="savings_amount" class="form-control"
+                     placeholder="0.00" step="0.01" min="0" required>
+            </div>
+            <div class="col-9 col-md-4">
+              <label class="form-label mb-1 small">Notes (optional)</label>
+              <input type="text" name="savings_notes" class="form-control"
+                     placeholder="e.g. week 3 chitty payment">
+            </div>
+            <div class="col-3 col-md-2">
+              <button type="submit" class="btn btn-primary w-100">💾</button>
+            </div>
+          </div>
+        </form>
+
+        <?php
+        // List today's savings
+        $savRes = mysqli_query($conn, "SELECT * FROM shop_savings WHERE savings_date='$today' AND is_deleted=0 ORDER BY id DESC");
+        $savRows = [];
+        while ($r = mysqli_fetch_assoc($savRes)) $savRows[] = $r;
+        if (!empty($savRows)): ?>
+        <div class="mt-3">
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0 align-middle" style="font-size:0.85rem;">
+              <thead class="table-light">
+                <tr><th>Type</th><th>Amount</th><th>Notes</th><th></th></tr>
+              </thead>
+              <tbody>
+                <?php foreach ($savRows as $s): ?>
+                <tr>
+                  <td><?php echo htmlspecialchars($s['savings_type']); ?></td>
+                  <td class="fw-semibold">₹<?php echo number_format($s['amount'], 2); ?></td>
+                  <td class="text-muted"><?php echo htmlspecialchars($s['notes'] ?? ''); ?></td>
+                  <td>
+                    <a href="?delete_saving=<?php echo $s['id']; ?>"
+                       onclick="return confirm('Remove this saving?');"
+                       class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:0.75rem;">✕</a>
+                  </td>
+                </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <?php endif; ?>
+      </div>
+    </div>
+
+  </div><!-- /container -->
 </main>
 
 <?php include_once("web_shopadmin_footer.php"); ?>
 
-<!-- Responsive Fixes -->
+<?php
+// Handle savings soft-delete (after output starts, redirect)
+if (isset($_GET['delete_saving'])) {
+    $sid = intval($_GET['delete_saving']);
+    mysqli_query($conn, "UPDATE shop_savings SET is_deleted=1 WHERE id=$sid");
+    echo "<script>window.location='shopexpense.php';</script>";
+}
+?>
+
 <style>
-  @media (max-width: 576px) {
-    .card-body form .col-md-6, 
-    .card-body form .col-md-3, 
-    .card-body form .col-12 {
-      flex: 100%;
-      max-width: 100%;
-    }
-  }
-
-  input[list] {
-    cursor: pointer;
-  }
-
-  .form-select-lg, .form-control {
-    font-size: 1rem;
-    padding: 0.7rem;
-  }
+/* Autocomplete dropdown */
+.expense-autocomplete { position: relative; }
+#expense_dropdown {
+  display: none;
+  position: absolute;
+  top: 100%; left: 0; right: 0;
+  z-index: 1050;
+  background: #fff;
+  border: 1px solid #ced4da;
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  max-height: 260px;
+  overflow-y: auto;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+}
+.exp-option {
+  padding: 9px 14px;
+  cursor: pointer;
+  font-size: 0.93rem;
+  border-bottom: 1px solid #f3f3f3;
+}
+.exp-option:hover, .exp-option.active {
+  background: #fff3cd;
+  color: #856404;
+}
+.exp-option mark {
+  background: #ffd700;
+  padding: 0;
+  font-weight: 600;
+}
 </style>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+  const HARDCODED = [
+    'Milk','Tea Powder','Sugar','Gas Cylinder','Snacks Purchase','Cleaning Items',
+    'Staff Salary','Electricity Bill','Rent','Water','Soda','Ice Purchase',
+    'Bread','Bun','Paper Cups','Auto','Miscellaneous',
+    'Tomato','Onion','Potato','Capsicum','Cabbage','Cauliflower','Carrot',
+    'Beans','Green Chilli','Coriander Leaves','Curry Leaves','Ginger','Garlic',
+    'Beetroot','Spinach','Drumstick','Ladies Finger','Cucumber','Bottle Gourd','Pumpkin',
+    'Pineapple','Banana','Apple','Orange','Watermelon','Papaya','Mango',
+    'Lemon','Grapes','Pomegranate','Coconut','Tender Coconut'
+  ];
+  const DB_NAMES  = <?php echo json_encode($pastNames); ?>;
+  const ALL_OPTIONS = [...new Set([...HARDCODED, ...DB_NAMES])].sort();
+
+  const input    = document.getElementById('expense_name');
+  const dropdown = document.getElementById('expense_dropdown');
+  let activeIdx  = -1;
+
+  function highlight(text, q) {
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return document.createTextNode(text);
+    const frag = document.createDocumentFragment();
+    frag.appendChild(document.createTextNode(text.slice(0, idx)));
+    const mark = document.createElement('mark');
+    mark.textContent = text.slice(idx, idx + q.length);
+    frag.appendChild(mark);
+    frag.appendChild(document.createTextNode(text.slice(idx + q.length)));
+    return frag;
+  }
+
+  function renderDropdown(q) {
+    dropdown.innerHTML = '';
+    activeIdx = -1;
+    if (!q) { dropdown.style.display = 'none'; return; }
+
+    const matches = ALL_OPTIONS.filter(o => o.toLowerCase().includes(q.toLowerCase()));
+    if (matches.length === 0) { dropdown.style.display = 'none'; return; }
+
+    matches.slice(0, 30).forEach((m, i) => {
+      const div = document.createElement('div');
+      div.className = 'exp-option';
+      div.dataset.idx = i;
+      div.appendChild(highlight(m, q));
+      div.addEventListener('mousedown', e => {
+        e.preventDefault();
+        input.value = m;
+        dropdown.style.display = 'none';
+      });
+      dropdown.appendChild(div);
+    });
+    dropdown.style.display = 'block';
+  }
+
+  input.addEventListener('input', () => renderDropdown(input.value.trim()));
+  input.addEventListener('keyup', e => {
+    if (['ArrowDown','ArrowUp','Enter','Escape'].includes(e.key)) return;
+    renderDropdown(input.value.trim());
+  });
+
+  input.addEventListener('keydown', e => {
+    const items = dropdown.querySelectorAll('.exp-option');
+    if (e.key === 'ArrowDown') {
+      activeIdx = Math.min(activeIdx + 1, items.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      activeIdx = Math.max(activeIdx - 1, -1);
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      input.value = items[activeIdx].textContent;
+      dropdown.style.display = 'none';
+      return;
+    } else if (e.key === 'Escape') {
+      dropdown.style.display = 'none'; return;
+    } else return;
+    items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+    if (activeIdx >= 0) items[activeIdx].scrollIntoView({ block: 'nearest' });
+  });
+
+  document.addEventListener('click', e => {
+    if (!input.contains(e.target) && !dropdown.contains(e.target))
+      dropdown.style.display = 'none';
+  });
+})();
+</script>
