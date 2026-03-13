@@ -291,12 +291,15 @@ $allLoadedRes = mysqli_query($conn, "
     ) wasted ON wasted.product_id = p.p_id
     WHERE (da.available_qty IS NOT NULL OR da_prev.old_qty IS NOT NULL)
       AND p.categorie = 2
-      AND NOW() < CASE UPPER(p.expiry_type)
-          WHEN 'MINUTE' THEN DATE_ADD(COALESCE(da.updated_at, da_prev.updated_at), INTERVAL p.expiry_value MINUTE)
-          WHEN 'HOUR'   THEN DATE_ADD(COALESCE(da.updated_at, da_prev.updated_at), INTERVAL p.expiry_value HOUR)
-          WHEN 'DAY'    THEN DATE_ADD(COALESCE(da.updated_at, da_prev.updated_at), INTERVAL p.expiry_value DAY)
-          ELSE DATE_ADD(COALESCE(da.updated_at, da_prev.updated_at), INTERVAL p.expiry_value DAY)
-      END
+      AND (
+          p.expiry_value IS NULL OR p.expiry_type IS NULL
+          OR NOW() < CASE UPPER(p.expiry_type)
+              WHEN 'MINUTE' THEN DATE_ADD(COALESCE(da.updated_at, da_prev.updated_at), INTERVAL p.expiry_value MINUTE)
+              WHEN 'HOUR'   THEN DATE_ADD(COALESCE(da.updated_at, da_prev.updated_at), INTERVAL p.expiry_value HOUR)
+              WHEN 'DAY'    THEN DATE_ADD(COALESCE(da.updated_at, da_prev.updated_at), INTERVAL p.expiry_value DAY)
+              ELSE DATE_ADD(COALESCE(da.updated_at, da_prev.updated_at), INTERVAL p.expiry_value DAY)
+          END
+      )
     ORDER BY p.name
 ");
 $allLoadedRows = [];
