@@ -157,7 +157,8 @@ foreach ($trendRows as $tr) { $bindArgs[] = $tr['start']; $bindArgs[] = $tr['end
 $trendStmt->bind_param(str_repeat('ss', 7), ...$bindArgs);
 $trendStmt->execute();
 $trendMap = [];
-while ($t = mysqli_fetch_assoc($trendStmt->get_result())) $trendMap[$t['sale_date']] = $t;
+$trendResult = $trendStmt->get_result();
+while ($t = mysqli_fetch_assoc($trendResult)) $trendMap[$t['sale_date']] = $t;
 $trendStmt->close();
 
 $trendLabels = []; $trendItems = []; $trendRevenue = []; $trendBills = [];
