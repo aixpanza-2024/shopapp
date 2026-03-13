@@ -56,13 +56,13 @@ $wasteSummRes = mysqli_query($conn, "
 ");
 $wasteSumm = mysqli_fetch_assoc($wasteSummRes);
 
-// ── 2. LOADED PRODUCTS (with sold + wastage) ──────────────────────────────────
+// ── 2. LOADED PRODUCTS (with sold + wastage, including carry-over stock) ──────
 $loadedRes = mysqli_query($conn, "
     SELECT
         p.p_id,
         p.name,
-        c.categorie      AS cat_name,
-        da.available_qty AS loaded,
+        c.categorie AS cat_name,
+        COALESCE(da.available_qty, da_prev.old_qty) AS loaded,
         IFNULL((
             SELECT SUM(ps.quantity)
             FROM daily_productsale ps
@@ -79,8 +79,22 @@ $loadedRes = mysqli_query($conn, "
         ), 0) AS wasted
     FROM products p
     JOIN categorie c ON c.cat_id = p.categorie
-    JOIN daily_availability da ON da.product_id = p.p_id
-                               AND da.available_date = '$avail_date'
+    LEFT JOIN daily_availability da
+           ON da.product_id    = p.p_id
+          AND da.available_date = '$avail_date'
+    LEFT JOIN (
+        SELECT da2.product_id, da2.available_qty AS old_qty
+        FROM daily_availability da2
+        INNER JOIN (
+            SELECT product_id, MAX(available_date) AS max_date
+            FROM daily_availability
+            WHERE available_date < '$avail_date'
+            GROUP BY product_id
+        ) latest ON latest.product_id = da2.product_id
+                AND latest.max_date   = da2.available_date
+    ) da_prev ON da_prev.product_id = p.p_id
+             AND da.available_qty IS NULL
+    WHERE (da.available_qty IS NOT NULL OR da_prev.old_qty IS NOT NULL)
     ORDER BY c.cat_id, p.name
 ");
 

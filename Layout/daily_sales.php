@@ -249,6 +249,51 @@ $snacksRes = mysqli_query($conn, "
 ");
 $snackRows = [];
 while ($r = mysqli_fetch_assoc($snacksRes)) $snackRows[] = $r;
+
+// --- All loaded products (current session, including carry-over) ---
+$allLoadedRes = mysqli_query($conn, "
+    SELECT
+        p.p_id,
+        p.name,
+        c.categorie AS cat_name,
+        COALESCE(da.available_qty, da_prev.old_qty) AS loaded,
+        IFNULL(sold.qty_sold, 0)      AS sold,
+        IFNULL(wasted.wastage_qty, 0) AS wasted
+    FROM products p
+    JOIN categorie c ON c.cat_id = p.categorie
+    LEFT JOIN daily_availability da
+           ON da.product_id    = p.p_id
+          AND da.available_date = '$session_date'
+    LEFT JOIN (
+        SELECT da2.product_id, da2.available_qty AS old_qty
+        FROM daily_availability da2
+        INNER JOIN (
+            SELECT product_id, MAX(available_date) AS max_date
+            FROM daily_availability
+            WHERE available_date < '$session_date'
+            GROUP BY product_id
+        ) latest ON latest.product_id = da2.product_id
+                AND latest.max_date   = da2.available_date
+    ) da_prev ON da_prev.product_id = p.p_id
+             AND da.available_qty IS NULL
+    LEFT JOIN (
+        SELECT p_id, SUM(quantity) AS qty_sold
+        FROM daily_productsale
+        WHERE Time >= '$def_start' AND Time <= '$def_end'
+          AND `payment status` != 'notpaid'
+        GROUP BY p_id
+    ) sold ON sold.p_id = p.p_id
+    LEFT JOIN (
+        SELECT product_id, SUM(wastage_qty) AS wastage_qty
+        FROM daily_wastage
+        WHERE wastage_date = '$session_date'
+        GROUP BY product_id
+    ) wasted ON wasted.product_id = p.p_id
+    WHERE (da.available_qty IS NOT NULL OR da_prev.old_qty IS NOT NULL)
+    ORDER BY c.cat_id, p.name
+");
+$allLoadedRows = [];
+while ($r = mysqli_fetch_assoc($allLoadedRes)) $allLoadedRows[] = $r;
 ?>
 
 <main>
@@ -408,6 +453,65 @@ while ($r = mysqli_fetch_assoc($snacksRes)) $snackRows[] = $r;
       </div>
     </div>
 
+    <!-- Loaded Stock Tracker -->
+    <?php if (!empty($allLoadedRows)): ?>
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-header text-white fw-bold d-flex justify-content-between align-items-center" style="background:#b8860b;">
+        <span>📦 Loaded Stock — Status</span>
+        <small class="opacity-75"><?php echo htmlspecialchars($session_date); ?></small>
+      </div>
+      <div class="card-body p-3">
+        <?php foreach ($allLoadedRows as $row):
+          $loaded    = (int)$row['loaded'];
+          $sold      = (int)$row['sold'];
+          $wasted    = (int)$row['wasted'];
+          $remaining = max(0, $loaded - $sold - $wasted);
+          $pct_sold  = $loaded > 0 ? round(($sold   / $loaded) * 100) : 0;
+          $pct_waste = $loaded > 0 ? round(($wasted / $loaded) * 100) : 0;
+        ?>
+        <div class="mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
+            <span class="fw-semibold">
+              <?php echo htmlspecialchars($row['name']); ?>
+              <span class="badge bg-secondary ms-1" style="font-size:0.7rem;"><?php echo htmlspecialchars($row['cat_name']); ?></span>
+            </span>
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted small">
+                Loaded: <strong><?php echo $loaded; ?></strong> &nbsp;
+                Sold: <strong class="text-success"><?php echo $sold; ?></strong> &nbsp;
+                <?php if ($wasted > 0): ?>
+                Wasted: <strong class="text-danger"><?php echo $wasted; ?></strong> &nbsp;
+                <?php endif; ?>
+                Left: <strong><?php echo $remaining; ?></strong>
+              </span>
+              <button class="btn btn-outline-danger btn-sm py-0 px-2"
+                      style="font-size:0.75rem;"
+                      onclick="openWastageModal(<?php echo $row['p_id']; ?>, '<?php echo addslashes(htmlspecialchars($row['name'])); ?>')">
+                + Wastage
+              </button>
+            </div>
+          </div>
+          <div class="progress" style="height:16px;border-radius:8px;background:#e9ecef;">
+            <div class="progress-bar" style="width:<?php echo $pct_sold; ?>%;background:#198754;border-radius:8px 0 0 8px;font-size:0.72rem;">
+              <?php echo $pct_sold > 12 ? $pct_sold . '%' : ''; ?>
+            </div>
+            <?php if ($pct_waste > 0): ?>
+            <div class="progress-bar" style="width:<?php echo $pct_waste; ?>%;background:#dc3545;border-radius:0;font-size:0.72rem;">
+              <?php echo $pct_waste > 8 ? $pct_waste . '%' : ''; ?>
+            </div>
+            <?php endif; ?>
+          </div>
+          <div class="d-flex gap-3 mt-1" style="font-size:0.72rem;color:#888;">
+            <span><span style="display:inline-block;width:10px;height:10px;background:#198754;border-radius:2px;"></span> Sold</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#dc3545;border-radius:2px;"></span> Wasted</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#e9ecef;border:1px solid #ccc;border-radius:2px;"></span> Remaining</span>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
+
     <!-- Item Detail Table -->
     <div class="card shadow-sm border-0 rounded-4">
       <div class="card-header text-white" style="background:#b8860b;">
@@ -493,6 +597,52 @@ while ($r = mysqli_fetch_assoc($snacksRes)) $snackRows[] = $r;
   </div><!-- /container -->
 </main>
 
+<!-- Wastage Modal -->
+<div class="modal fade" id="wastageModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#fff3cd;">
+        <h6 class="modal-title fw-bold">🗑 Log Wastage — <span id="wastageModalLabel"></span></h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="w_product_id">
+        <input type="hidden" id="w_prod_name">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Quantity Wasted <span class="text-danger">*</span></label>
+          <input type="number" id="w_qty" class="form-control" min="1" placeholder="e.g. 5">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Reason</label>
+          <div class="d-flex gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="w_reason_radio" id="r_unsold" value="unsold" checked>
+              <label class="form-check-label" for="r_unsold">Unsold</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="w_reason_radio" id="r_damaged" value="damaged">
+              <label class="form-check-label" for="r_damaged">Damaged</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="w_reason_radio" id="r_other" value="other">
+              <label class="form-check-label" for="r_other">Other</label>
+            </div>
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold">Notes <span class="text-muted small">(optional)</span></label>
+          <input type="text" id="w_notes" class="form-control" placeholder="e.g. fell, expired, returned">
+        </div>
+        <div id="wastageError" class="text-danger small d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" onclick="submitWastage()">Log Wastage</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <?php include_once("web_shopadmin_footer.php"); ?>
 
 <style>
@@ -533,5 +683,61 @@ while ($r = mysqli_fetch_assoc($snacksRes)) $snackRows[] = $r;
     }
   });
 })();
+</script>
+<?php endif; ?>
+
+<?php if (!empty($allLoadedRows)): ?>
+<script>
+const AVAIL_DATE = <?php echo json_encode($session_date); ?>;
+
+function openWastageModal(pid, pname) {
+  document.getElementById('w_product_id').value = pid;
+  document.getElementById('w_prod_name').value  = pname;
+  document.getElementById('wastageModalLabel').textContent = pname;
+  document.getElementById('w_qty').value   = '';
+  document.getElementById('w_notes').value = '';
+  document.querySelector('input[name="w_reason_radio"][value="unsold"]').checked = true;
+  document.getElementById('wastageError').classList.add('d-none');
+  new bootstrap.Modal(document.getElementById('wastageModal')).show();
+}
+
+function submitWastage() {
+  const pid    = document.getElementById('w_product_id').value;
+  const pname  = document.getElementById('w_prod_name').value;
+  const qty    = parseInt(document.getElementById('w_qty').value);
+  const reason = document.querySelector('input[name="w_reason_radio"]:checked').value;
+  const notes  = document.getElementById('w_notes').value.trim();
+  const errEl  = document.getElementById('wastageError');
+
+  if (!qty || qty <= 0) {
+    errEl.textContent = 'Please enter a valid quantity.';
+    errEl.classList.remove('d-none');
+    return;
+  }
+  errEl.classList.add('d-none');
+
+  fetch(`../wastage_handler.php?action=log&product_id=${pid}&prod_name=${encodeURIComponent(pname)}&qty=${qty}&reason=${reason}&notes=${encodeURIComponent(notes)}&avail_date=${encodeURIComponent(AVAIL_DATE)}`)
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('wastageModal')).hide();
+        location.reload();
+      } else {
+        errEl.textContent = d.msg || 'Failed to log wastage.';
+        errEl.classList.remove('d-none');
+      }
+    })
+    .catch(() => {
+      errEl.textContent = 'Network error. Please try again.';
+      errEl.classList.remove('d-none');
+    });
+}
+
+function deleteWastage(id, btn) {
+  if (!confirm('Remove this wastage entry?')) return;
+  fetch(`../wastage_handler.php?action=delete&id=${id}`)
+    .then(r => r.json())
+    .then(d => { if (d.ok) location.reload(); });
+}
 </script>
 <?php endif; ?>
