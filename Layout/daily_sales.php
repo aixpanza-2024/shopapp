@@ -250,7 +250,7 @@ $snacksRes = mysqli_query($conn, "
 $snackRows = [];
 while ($r = mysqli_fetch_assoc($snacksRes)) $snackRows[] = $r;
 
-// --- All loaded products (current session, including carry-over) ---
+// --- All loaded products (current session, snacks only, not expired) ---
 $allLoadedRes = mysqli_query($conn, "
     SELECT
         p.p_id,
@@ -265,7 +265,7 @@ $allLoadedRes = mysqli_query($conn, "
            ON da.product_id    = p.p_id
           AND da.available_date = '$session_date'
     LEFT JOIN (
-        SELECT da2.product_id, da2.available_qty AS old_qty
+        SELECT da2.product_id, da2.available_qty AS old_qty, da2.updated_at
         FROM daily_availability da2
         INNER JOIN (
             SELECT product_id, MAX(available_date) AS max_date
@@ -290,7 +290,14 @@ $allLoadedRes = mysqli_query($conn, "
         GROUP BY product_id
     ) wasted ON wasted.product_id = p.p_id
     WHERE (da.available_qty IS NOT NULL OR da_prev.old_qty IS NOT NULL)
-    ORDER BY c.cat_id, p.name
+      AND p.categorie = 2
+      AND NOW() < CASE UPPER(p.expiry_type)
+          WHEN 'MINUTE' THEN DATE_ADD(COALESCE(da.updated_at, da_prev.updated_at), INTERVAL p.expiry_value MINUTE)
+          WHEN 'HOUR'   THEN DATE_ADD(COALESCE(da.updated_at, da_prev.updated_at), INTERVAL p.expiry_value HOUR)
+          WHEN 'DAY'    THEN DATE_ADD(COALESCE(da.updated_at, da_prev.updated_at), INTERVAL p.expiry_value DAY)
+          ELSE DATE_ADD(COALESCE(da.updated_at, da_prev.updated_at), INTERVAL p.expiry_value DAY)
+      END
+    ORDER BY p.name
 ");
 $allLoadedRows = [];
 while ($r = mysqli_fetch_assoc($allLoadedRes)) $allLoadedRows[] = $r;
@@ -480,9 +487,8 @@ while ($r = mysqli_fetch_assoc($allLoadedRes)) $allLoadedRows[] = $r;
                 Loaded: <strong><?php echo $loaded; ?></strong> &nbsp;
                 Sold: <strong class="text-success"><?php echo $sold; ?></strong> &nbsp;
                 <?php if ($wasted > 0): ?>
-                Wasted: <strong class="text-danger"><?php echo $wasted; ?></strong> &nbsp;
+                Wasted: <strong class="text-danger"><?php echo $wasted; ?></strong>
                 <?php endif; ?>
-                Left: <strong><?php echo $remaining; ?></strong>
               </span>
               <button class="btn btn-outline-danger btn-sm py-0 px-2"
                       style="font-size:0.75rem;"

@@ -95,6 +95,8 @@ $loadedRes = mysqli_query($conn, "
     ) da_prev ON da_prev.product_id = p.p_id
              AND da.available_qty IS NULL
     WHERE (da.available_qty IS NOT NULL OR da_prev.old_qty IS NOT NULL)
+      AND LOWER(c.categorie) NOT LIKE '%plate%'
+      AND LOWER(c.categorie) NOT LIKE '%juice%'
     ORDER BY c.cat_id, p.name
 ");
 
