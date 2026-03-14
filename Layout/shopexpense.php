@@ -1,5 +1,6 @@
 <?php
 include("web_shopadmin_header.php");
+date_default_timezone_set('Asia/Kolkata');
 
 // Auto-create tables
 mysqli_query($conn, "CREATE TABLE IF NOT EXISTS shop_daily_opening (
@@ -20,17 +21,40 @@ mysqli_query($conn, "CREATE TABLE IF NOT EXISTS shop_savings (
     is_deleted TINYINT(1) NOT NULL DEFAULT 0
 )");
 
-date_default_timezone_set('Asia/Kolkata');
-$today = date('Y-m-d');
+// Ensure expense rows can be tracked within the session window.
+$expenseCreatedAtRes = mysqli_query($conn, "SHOW COLUMNS FROM shop_expenses LIKE 'created_at'");
+if ($expenseCreatedAtRes && mysqli_num_rows($expenseCreatedAtRes) === 0) {
+    mysqli_query($conn, "ALTER TABLE shop_expenses ADD COLUMN created_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP");
+}
+
+// --- Default time range: shop session 2 PM -> 2 AM next day ---
+$hour = (int)date('H');
+if ($hour < 2) {
+    $session_date = date('Y-m-d', strtotime('-1 day'));
+} else {
+    $session_date = date('Y-m-d');
+}
+$def_start = $session_date . ' 14:00';
+$def_end   = date('Y-m-d', strtotime($session_date . ' +1 day')) . ' 02:00';
+
+$start_time = isset($_GET['start_time']) && $_GET['start_time'] !== '' ? $_GET['start_time'] : $def_start;
+$end_time   = isset($_GET['end_time'])   && $_GET['end_time']   !== '' ? $_GET['end_time']   : $def_end;
+
+$start_time = str_replace('T', ' ', $start_time);
+$end_time   = str_replace('T', ' ', $end_time);
+$report_session_date = date('Y-m-d', strtotime($start_time));
+$redirect_qs = '?start_time=' . urlencode(str_replace(' ', 'T', $start_time)) . '&end_time=' . urlencode(str_replace(' ', 'T', $end_time));
+$entry_session_date = $session_date;
+$now_ts = date('Y-m-d H:i:s');
 
 // Handle opening balance
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 'opening_balance') {
     $amount = floatval($_POST['ob_amount']);
     $notes  = mysqli_real_escape_string($conn, trim($_POST['ob_notes'] ?? ''));
     mysqli_query($conn, "INSERT INTO shop_daily_opening (opening_date, amount, notes)
-        VALUES ('$today', $amount, '$notes')
+        VALUES ('$entry_session_date', $amount, '$notes')
         ON DUPLICATE KEY UPDATE amount=$amount, notes='$notes'");
-    echo "<script>alert('Opening balance saved!'); window.location='shopexpense.php';</script>";
+    echo "<script>alert('Opening balance saved!'); window.location='shopexpense.php{$redirect_qs}';</script>";
     exit;
 }
 
@@ -39,9 +63,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 'sa
     $type   = mysqli_real_escape_string($conn, trim($_POST['savings_type']));
     $amount = floatval($_POST['savings_amount']);
     $notes  = mysqli_real_escape_string($conn, trim($_POST['savings_notes'] ?? ''));
-    mysqli_query($conn, "INSERT INTO shop_savings (savings_type, amount, notes, savings_date)
-        VALUES ('$type', $amount, '$notes', '$today')");
-    echo "<script>alert('Savings recorded!'); window.location='shopexpense.php';</script>";
+    mysqli_query($conn, "INSERT INTO shop_savings (savings_type, amount, notes, savings_date, created_at)
+        VALUES ('$type', $amount, '$notes', '$entry_session_date', '$now_ts')");
+    echo "<script>alert('Savings recorded!'); window.location='shopexpense.php{$redirect_qs}';</script>";
     exit;
 }
 
@@ -52,27 +76,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 'ex
     $expense_qty      = max(1, intval($_POST['expense_qty']));
     $expense_category = mysqli_real_escape_string($conn, $_POST['expense_category']);
     $expense_note     = mysqli_real_escape_string($conn, trim($_POST['expense_note'] ?? ''));
-    $sql = "INSERT INTO shop_expenses (expense_name, expense_amount, expense_qty, expense_date, expense_category, expense_note)
-            VALUES ('$expense_name', $expense_amount, $expense_qty, '$today', '$expense_category', '$expense_note')";
+    $sql = "INSERT INTO shop_expenses (expense_name, expense_amount, expense_qty, expense_date, expense_category, expense_note, created_at)
+            VALUES ('$expense_name', $expense_amount, $expense_qty, '$entry_session_date', '$expense_category', '$expense_note', '$now_ts')";
     if (mysqli_query($conn, $sql)) {
-        echo "<script>alert('Expense added!'); window.location='shopexpense.php';</script>";
+        echo "<script>alert('Expense added!'); window.location='shopexpense.php{$redirect_qs}';</script>";
     } else {
         echo "<script>alert('Error: " . mysqli_error($conn) . "');</script>";
     }
     exit;
 }
 
-// Today's opening balance
-$ob_row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM shop_daily_opening WHERE opening_date='$today'"));
+// Session opening balance
+$ob_row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM shop_daily_opening WHERE opening_date='$report_session_date'"));
 
 // Past expense names for autocomplete (from DB)
 $pastNamesRes = mysqli_query($conn, "SELECT DISTINCT expense_name FROM shop_expenses WHERE is_deleted=0 ORDER BY expense_name");
 $pastNames = [];
 while ($r = mysqli_fetch_assoc($pastNamesRes)) $pastNames[] = $r['expense_name'];
 
-// Today's totals summary
-$todayExpRow   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(expense_amount * expense_qty),0) AS total FROM shop_expenses WHERE expense_date='$today' AND is_deleted=0"));
-$todaySavRow   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(amount),0) AS total FROM shop_savings WHERE savings_date='$today' AND is_deleted=0"));
+// Session totals summary
+$sessionExpRow = mysqli_fetch_assoc(mysqli_query($conn, "
+    SELECT COALESCE(SUM(expense_amount * expense_qty), 0) AS total
+    FROM shop_expenses
+    WHERE is_deleted = 0
+      AND (
+        (created_at IS NOT NULL AND created_at >= '$start_time' AND created_at <= '$end_time')
+        OR (created_at IS NULL AND expense_date = '$report_session_date')
+      )
+"));
+$sessionSavRow = mysqli_fetch_assoc(mysqli_query($conn, "
+    SELECT COALESCE(SUM(amount), 0) AS total
+    FROM shop_savings
+    WHERE is_deleted = 0
+      AND (
+        (created_at >= '$start_time' AND created_at <= '$end_time')
+        OR (created_at IS NULL AND savings_date = '$report_session_date')
+      )
+"));
+$sessionSavRes = mysqli_query($conn, "
+    SELECT *
+    FROM shop_savings
+    WHERE is_deleted = 0
+      AND (
+        (created_at >= '$start_time' AND created_at <= '$end_time')
+        OR (created_at IS NULL AND savings_date = '$report_session_date')
+      )
+    ORDER BY COALESCE(created_at, CONCAT(savings_date, ' 00:00:00')) DESC, id DESC
+");
+$sessionSavRows = [];
+while ($r = mysqli_fetch_assoc($sessionSavRes)) $sessionSavRows[] = $r;
 ?>
 
 <main>
@@ -91,7 +143,27 @@ $todaySavRow   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(amo
 
   <div class="container py-3">
 
-    <!-- Today's Summary Row -->
+    <div class="card shadow-sm border-0 rounded-4 mb-3">
+      <div class="card-body">
+        <form method="GET" action="shopexpense.php" class="row g-2 align-items-end">
+          <div class="col-md-5 col-6">
+            <label class="form-label mb-1">From</label>
+            <input type="datetime-local" name="start_time" class="form-control"
+                   value="<?php echo htmlspecialchars(str_replace(' ', 'T', $start_time)); ?>">
+          </div>
+          <div class="col-md-5 col-6">
+            <label class="form-label mb-1">To</label>
+            <input type="datetime-local" name="end_time" class="form-control"
+                   value="<?php echo htmlspecialchars(str_replace(' ', 'T', $end_time)); ?>">
+          </div>
+          <div class="col-md-2 col-12">
+            <button type="submit" class="btn btn-warning text-white w-100">Apply</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Session Summary Row -->
     <div class="row g-2 mb-3">
       <div class="col-4">
         <div class="card border-0 shadow-sm rounded-3 text-center py-2">
@@ -103,14 +175,14 @@ $todaySavRow   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(amo
       </div>
       <div class="col-4">
         <div class="card border-0 shadow-sm rounded-3 text-center py-2">
-          <div class="text-muted" style="font-size:0.72rem;">Expenses Today</div>
-          <div class="fw-bold fs-6 text-danger">₹<?php echo number_format($todayExpRow['total'], 2); ?></div>
+          <div class="text-muted" style="font-size:0.72rem;">Expenses In Range</div>
+          <div class="fw-bold fs-6 text-danger">₹<?php echo number_format($sessionExpRow['total'], 2); ?></div>
         </div>
       </div>
       <div class="col-4">
         <div class="card border-0 shadow-sm rounded-3 text-center py-2">
-          <div class="text-muted" style="font-size:0.72rem;">Savings Today</div>
-          <div class="fw-bold fs-6 text-primary">₹<?php echo number_format($todaySavRow['total'], 2); ?></div>
+          <div class="text-muted" style="font-size:0.72rem;">Savings In Range</div>
+          <div class="fw-bold fs-6 text-primary">₹<?php echo number_format($sessionSavRow['total'], 2); ?></div>
         </div>
       </div>
     </div>
@@ -120,12 +192,12 @@ $todaySavRow   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(amo
       <div class="card-header fw-bold text-white d-flex justify-content-between align-items-center"
            style="background:#5a7a3a;">
         <span>💰 Opening Balance</span>
-        <small class="opacity-75"><?php echo $today; ?></small>
+        <small class="opacity-75"><?php echo htmlspecialchars($report_session_date); ?></small>
       </div>
       <div class="card-body py-3">
         <?php if ($ob_row): ?>
         <div class="alert alert-success py-2 mb-2 d-flex justify-content-between align-items-center">
-          <span>Today's balance: <strong>₹<?php echo number_format($ob_row['amount'], 2); ?></strong>
+          <span>Session balance: <strong>₹<?php echo number_format($ob_row['amount'], 2); ?></strong>
             <?php if ($ob_row['notes']) echo ' — <em>' . htmlspecialchars($ob_row['notes']) . '</em>'; ?>
           </span>
           <small class="text-muted">tap below to update</small>
@@ -244,26 +316,25 @@ $todaySavRow   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(amo
           </div>
         </form>
 
-        <?php
-        // List today's savings
-        $savRes = mysqli_query($conn, "SELECT * FROM shop_savings WHERE savings_date='$today' AND is_deleted=0 ORDER BY id DESC");
-        $savRows = [];
-        while ($r = mysqli_fetch_assoc($savRes)) $savRows[] = $r;
-        if (!empty($savRows)): ?>
+        <?php if (!empty($sessionSavRows)): ?>
         <div class="mt-3">
+          <div class="small text-muted mb-2">
+            Showing savings from <?php echo htmlspecialchars(date('d M Y h:i A', strtotime($start_time))); ?>
+            to <?php echo htmlspecialchars(date('d M Y h:i A', strtotime($end_time))); ?>
+          </div>
           <div class="table-responsive">
             <table class="table table-sm table-bordered mb-0 align-middle" style="font-size:0.85rem;">
               <thead class="table-light">
                 <tr><th>Type</th><th>Amount</th><th>Notes</th><th></th></tr>
               </thead>
               <tbody>
-                <?php foreach ($savRows as $s): ?>
+                <?php foreach ($sessionSavRows as $s): ?>
                 <tr>
                   <td><?php echo htmlspecialchars($s['savings_type']); ?></td>
                   <td class="fw-semibold">₹<?php echo number_format($s['amount'], 2); ?></td>
                   <td class="text-muted"><?php echo htmlspecialchars($s['notes'] ?? ''); ?></td>
                   <td>
-                    <a href="?delete_saving=<?php echo $s['id']; ?>"
+                    <a href="?delete_saving=<?php echo $s['id']; ?>&start_time=<?php echo urlencode(str_replace(' ', 'T', $start_time)); ?>&end_time=<?php echo urlencode(str_replace(' ', 'T', $end_time)); ?>"
                        onclick="return confirm('Remove this saving?');"
                        class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:0.75rem;">✕</a>
                   </td>
@@ -287,7 +358,7 @@ $todaySavRow   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(amo
 if (isset($_GET['delete_saving'])) {
     $sid = intval($_GET['delete_saving']);
     mysqli_query($conn, "UPDATE shop_savings SET is_deleted=1 WHERE id=$sid");
-    echo "<script>window.location='shopexpense.php';</script>";
+    echo "<script>window.location='shopexpense.php{$redirect_qs}';</script>";
 }
 ?>
 

@@ -16,6 +16,11 @@ mysqli_query($conn, "
     )
 ");
 
+$expenseCreatedAtRes = mysqli_query($conn, "SHOW COLUMNS FROM shop_expenses LIKE 'created_at'");
+if ($expenseCreatedAtRes && mysqli_num_rows($expenseCreatedAtRes) === 0) {
+    mysqli_query($conn, "ALTER TABLE shop_expenses ADD COLUMN created_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP");
+}
+
 // --- Shop session: opens 2 PM, closes 2 AM next day ---
 $hour = (int)date('H');
 if ($hour < 2) {
@@ -138,11 +143,30 @@ $hourlyRes = mysqli_query($conn, "
 $sessionHours = array_merge(range(14, 23), range(0, 2));
 $hourlyItems  = array_fill_keys($sessionHours, 0);
 $hourlyRev    = array_fill_keys($sessionHours, 0);
+$hourlyExp    = array_fill_keys($sessionHours, 0);
 while ($h = mysqli_fetch_assoc($hourlyRes)) {
     $hr = (int)$h['hr'];
     if (isset($hourlyItems[$hr])) {
         $hourlyItems[$hr] = (int)$h['items'];
         $hourlyRev[$hr]   = (float)$h['revenue'];
+    }
+}
+$hourlyExpRes = mysqli_query($conn, "
+    SELECT HOUR(COALESCE(created_at, CONCAT(expense_date, ' 14:00:00'))) AS hr,
+           IFNULL(SUM(expense_amount * expense_qty), 0) AS total
+    FROM shop_expenses
+    WHERE is_deleted = 0
+      AND (
+        (created_at IS NOT NULL AND created_at >= '$start_time' AND created_at <= '$end_time')
+        OR (created_at IS NULL AND expense_date = '$avail_date')
+      )
+    GROUP BY HOUR(COALESCE(created_at, CONCAT(expense_date, ' 14:00:00')))
+    ORDER BY hr
+");
+while ($e = mysqli_fetch_assoc($hourlyExpRes)) {
+    $hr = (int)$e['hr'];
+    if (isset($hourlyExp[$hr])) {
+        $hourlyExp[$hr] = (float)$e['total'];
     }
 }
 $hourLabels = [];
@@ -177,12 +201,25 @@ $trendResult = $trendStmt->get_result();
 while ($t = mysqli_fetch_assoc($trendResult)) $trendMap[$t['sale_date']] = $t;
 $trendStmt->close();
 
-$trendLabels = []; $trendItems = []; $trendRevenue = []; $trendBills = [];
+$trendExpMap = [];
+$trendExpRes = mysqli_query($conn, "
+    SELECT expense_date, IFNULL(SUM(expense_amount * expense_qty), 0) AS total
+    FROM shop_expenses
+    WHERE is_deleted = 0
+      AND expense_date BETWEEN '" . date('Y-m-d', strtotime('-6 days', strtotime($session_date))) . "' AND '$session_date'
+    GROUP BY expense_date
+");
+while ($te = mysqli_fetch_assoc($trendExpRes)) {
+    $trendExpMap[$te['expense_date']] = (float)$te['total'];
+}
+
+$trendLabels = []; $trendItems = []; $trendRevenue = []; $trendBills = []; $trendExpenses = [];
 foreach ($trendRows as $s_date => $tr) {
     $trendLabels[]  = $tr['label'];
     $trendItems[]   = isset($trendMap[$s_date]) ? (int)$trendMap[$s_date]['items']   : 0;
     $trendRevenue[] = isset($trendMap[$s_date]) ? (float)$trendMap[$s_date]['revenue'] : 0;
     $trendBills[]   = isset($trendMap[$s_date]) ? (int)$trendMap[$s_date]['bills']   : 0;
+    $trendExpenses[] = $trendExpMap[$s_date] ?? 0;
 }
 
 // ── 6. PRODUCT-LEVEL SALES ────────────────────────────────────────────────────
@@ -423,13 +460,13 @@ while ($w = mysqli_fetch_assoc($wasteLogRes)) $wasteLog[] = $w;
   <div class="row g-3 mb-4">
     <div class="col-md-6">
       <div class="card border-0 shadow-sm rounded-4 h-100">
-        <div class="card-header text-white fw-bold" style="background:#b8860b;">⏰ Hourly Sales</div>
+        <div class="card-header text-white fw-bold" style="background:#b8860b;">⏰ Hourly Performance</div>
         <div class="card-body"><canvas id="hourlyChart" height="220"></canvas></div>
       </div>
     </div>
     <div class="col-md-6">
       <div class="card border-0 shadow-sm rounded-4 h-100">
-        <div class="card-header text-white fw-bold" style="background:#b8860b;">📈 7-Session Trend</div>
+        <div class="card-header text-white fw-bold" style="background:#b8860b;">📈 7-Session Performance Trend</div>
         <div class="card-body"><canvas id="trendChart" height="220"></canvas></div>
       </div>
     </div>
@@ -559,7 +596,8 @@ new Chart(document.getElementById('hourlyChart').getContext('2d'), {
     labels: <?php echo json_encode($hourLabels); ?>,
     datasets: [
       { label: 'Items Sold', data: <?php echo json_encode(array_values($hourlyItems)); ?>, borderColor: '#b8860b', backgroundColor: 'rgba(184,134,11,0.12)', fill: true, tension: 0.4, pointRadius: 3, yAxisID: 'y' },
-      { label: 'Revenue (₹)', data: <?php echo json_encode(array_values($hourlyRev)); ?>, borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.08)', fill: false, tension: 0.4, pointRadius: 3, yAxisID: 'y2' }
+      { label: 'Revenue (₹)', data: <?php echo json_encode(array_values($hourlyRev)); ?>, borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.08)', fill: false, tension: 0.4, pointRadius: 3, yAxisID: 'y2' },
+      { label: 'Expenses (₹)', data: <?php echo json_encode(array_values($hourlyExp)); ?>, borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.08)', fill: false, tension: 0.35, pointRadius: 3, yAxisID: 'y2' }
     ]
   },
   options: {
@@ -579,7 +617,8 @@ new Chart(document.getElementById('trendChart').getContext('2d'), {
     datasets: [
       { label: 'Items Sold', data: <?php echo json_encode($trendItems); ?>, borderColor: '#b8860b', backgroundColor: 'rgba(184,134,11,0.12)', fill: true, tension: 0.4, pointRadius: 5, pointHoverRadius: 7, yAxisID: 'y' },
       { label: 'Revenue (₹)', data: <?php echo json_encode($trendRevenue); ?>, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.08)', fill: false, tension: 0.4, pointRadius: 5, pointHoverRadius: 7, yAxisID: 'y2' },
-      { label: 'Bills', data: <?php echo json_encode($trendBills); ?>, borderColor: '#dc3545', backgroundColor: 'transparent', fill: false, tension: 0.4, pointRadius: 4, borderDash: [5, 4], yAxisID: 'y' }
+      { label: 'Expenses (₹)', data: <?php echo json_encode($trendExpenses); ?>, borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.06)', fill: false, tension: 0.35, pointRadius: 5, pointHoverRadius: 7, yAxisID: 'y2' },
+      { label: 'Bills', data: <?php echo json_encode($trendBills); ?>, borderColor: '#6c757d', backgroundColor: 'transparent', fill: false, tension: 0.4, pointRadius: 4, borderDash: [5, 4], yAxisID: 'y' }
     ]
   },
   options: {
