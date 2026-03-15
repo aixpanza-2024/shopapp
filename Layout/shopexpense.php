@@ -26,6 +26,18 @@ $expenseCreatedAtRes = mysqli_query($conn, "SHOW COLUMNS FROM shop_expenses LIKE
 if ($expenseCreatedAtRes && mysqli_num_rows($expenseCreatedAtRes) === 0) {
     mysqli_query($conn, "ALTER TABLE shop_expenses ADD COLUMN created_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP");
 }
+$expenseSupplierIdRes = mysqli_query($conn, "SHOW COLUMNS FROM shop_expenses LIKE 'supplier_id'");
+if ($expenseSupplierIdRes && mysqli_num_rows($expenseSupplierIdRes) === 0) {
+    mysqli_query($conn, "ALTER TABLE shop_expenses ADD COLUMN supplier_id INT NULL AFTER expense_category");
+}
+$expenseSupplierNameRes = mysqli_query($conn, "SHOW COLUMNS FROM shop_expenses LIKE 'supplier_name'");
+if ($expenseSupplierNameRes && mysqli_num_rows($expenseSupplierNameRes) === 0) {
+    mysqli_query($conn, "ALTER TABLE shop_expenses ADD COLUMN supplier_name VARCHAR(255) NULL AFTER supplier_id");
+}
+$expensePaymentStatusRes = mysqli_query($conn, "SHOW COLUMNS FROM shop_expenses LIKE 'payment_status'");
+if ($expensePaymentStatusRes && mysqli_num_rows($expensePaymentStatusRes) === 0) {
+    mysqli_query($conn, "ALTER TABLE shop_expenses ADD COLUMN payment_status VARCHAR(20) NOT NULL DEFAULT 'paid' AFTER supplier_name");
+}
 
 // --- Default time range: shop session 2 PM -> 2 AM next day ---
 $hour = (int)date('H');
@@ -75,9 +87,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 'ex
     $expense_amount   = floatval($_POST['expense_amount']);
     $expense_qty      = max(1, intval($_POST['expense_qty']));
     $expense_category = mysqli_real_escape_string($conn, $_POST['expense_category']);
+    $supplier_id      = intval($_POST['supplier_id'] ?? 0);
+    $payment_status_raw = trim($_POST['payment_status'] ?? 'paid');
+    $payment_status   = $payment_status_raw === 'not paid' ? 'not paid' : 'paid';
     $expense_note     = mysqli_real_escape_string($conn, trim($_POST['expense_note'] ?? ''));
-    $sql = "INSERT INTO shop_expenses (expense_name, expense_amount, expense_qty, expense_date, expense_category, expense_note, created_at)
-            VALUES ('$expense_name', $expense_amount, $expense_qty, '$entry_session_date', '$expense_category', '$expense_note', '$now_ts')";
+    $supplier_name    = '';
+    if ($supplier_id > 0) {
+        $shop_id = intval($_SESSION['selectshop'] ?? 0);
+        $supplierSql = "SELECT sup_id, name FROM supplier WHERE sup_id = $supplier_id";
+        if ($shop_id > 0) {
+            $supplierSql .= " AND sh_id = $shop_id";
+        }
+        $supplierSql .= " LIMIT 1";
+        $supplierRes = mysqli_query($conn, $supplierSql);
+        if ($supplierRes && ($supplierRow = mysqli_fetch_assoc($supplierRes))) {
+            $supplier_id = (int)$supplierRow['sup_id'];
+            $supplier_name = mysqli_real_escape_string($conn, $supplierRow['name']);
+        } else {
+            $supplier_id = 0;
+        }
+    }
+    $supplier_id_sql = $supplier_id > 0 ? (string)$supplier_id : "NULL";
+    $sql = "INSERT INTO shop_expenses (expense_name, expense_amount, expense_qty, expense_date, expense_category, supplier_id, supplier_name, payment_status, expense_note, created_at)
+            VALUES ('$expense_name', $expense_amount, $expense_qty, '$entry_session_date', '$expense_category', $supplier_id_sql, '$supplier_name', '$payment_status', '$expense_note', '$now_ts')";
     if (mysqli_query($conn, $sql)) {
         echo "<script>alert('Expense added!'); window.location='shopexpense.php{$redirect_qs}';</script>";
     } else {
@@ -93,6 +125,16 @@ $ob_row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM shop_daily_openi
 $pastNamesRes = mysqli_query($conn, "SELECT DISTINCT expense_name FROM shop_expenses WHERE is_deleted=0 ORDER BY expense_name");
 $pastNames = [];
 while ($r = mysqli_fetch_assoc($pastNamesRes)) $pastNames[] = $r['expense_name'];
+
+$supplierRows = [];
+$shopId = intval($_SESSION['selectshop'] ?? 0);
+$supplierWhere = $shopId > 0 ? "WHERE sh_id = $shopId" : "";
+$suppliersRes = mysqli_query($conn, "SELECT sup_id, name FROM supplier $supplierWhere ORDER BY name");
+if ($suppliersRes) {
+    while ($r = mysqli_fetch_assoc($suppliersRes)) {
+        $supplierRows[] = $r;
+    }
+}
 
 // Session totals summary
 $sessionExpRow = mysqli_fetch_assoc(mysqli_query($conn, "
@@ -262,11 +304,29 @@ while ($r = mysqli_fetch_assoc($sessionSavRes)) $sessionSavRows[] = $r;
 
             <div class="col-12 col-md-6">
               <label class="form-label mb-1 small">Category</label>
-              <select name="expense_category" class="form-select">
+              <select name="expense_category" class="form-select" required>
                 <option value="">Select Category</option>
                 <?php foreach (['Raw Materials','Staff Salary','Maintenance','Utilities','Miscellaneous'] as $cat): ?>
                 <option value="<?php echo $cat; ?>"><?php echo $cat; ?></option>
                 <?php endforeach; ?>
+              </select>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label mb-1 small">Supplier Name</label>
+              <select name="supplier_id" class="form-select" <?php echo !empty($supplierRows) ? 'required' : ''; ?>>
+                <option value=""><?php echo !empty($supplierRows) ? 'Select Supplier' : 'No suppliers found'; ?></option>
+                <?php foreach ($supplierRows as $supplier): ?>
+                <option value="<?php echo (int)$supplier['sup_id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label mb-1 small">Payment Status</label>
+              <select name="payment_status" class="form-select" required>
+                <option value="paid">Paid</option>
+                <option value="not paid">Not Paid</option>
               </select>
             </div>
 

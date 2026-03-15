@@ -13,6 +13,7 @@ if (isset($_GET['delete_id'])) {
 date_default_timezone_set('Asia/Kolkata');
 $filter_date     = isset($_GET['filter_date'])     && $_GET['filter_date']     !== '' ? $_GET['filter_date']     : date('Y-m-d');
 $filter_category = isset($_GET['filter_category']) && $_GET['filter_category'] !== '' ? $_GET['filter_category'] : '';
+$filter_payment_status = isset($_GET['filter_payment_status']) && $_GET['filter_payment_status'] !== '' ? $_GET['filter_payment_status'] : '';
 $filter_all      = isset($_GET['filter_all']);   // show all dates when checked
 
 $where = "WHERE is_deleted = 0";
@@ -21,6 +22,9 @@ if (!$filter_all) {
 }
 if ($filter_category !== '') {
     $where .= " AND expense_category = '" . mysqli_real_escape_string($conn, $filter_category) . "'";
+}
+if ($filter_payment_status !== '') {
+    $where .= " AND payment_status = '" . mysqli_real_escape_string($conn, $filter_payment_status) . "'";
 }
 
 $query = "SELECT * FROM shop_expenses $where ORDER BY expense_date DESC, id DESC";
@@ -54,6 +58,7 @@ $result = mysqli_query($conn, $query);
           Expenses &mdash;
           <?php echo $filter_all ? 'All Dates' : htmlspecialchars($filter_date); ?>
           <?php if ($filter_category) echo ' &bull; ' . htmlspecialchars($filter_category); ?>
+          <?php if ($filter_payment_status) echo ' &bull; ' . htmlspecialchars(ucwords($filter_payment_status)); ?>
         </h5>
       </div>
 
@@ -79,6 +84,14 @@ $result = mysqli_query($conn, $query);
               ?>
             </select>
           </div>
+          <div class="col-auto">
+            <label class="form-label mb-1">Status</label>
+            <select name="filter_payment_status" class="form-select">
+              <option value="">All Status</option>
+              <option value="paid" <?php echo $filter_payment_status === 'paid' ? 'selected' : ''; ?>>Paid</option>
+              <option value="not paid" <?php echo $filter_payment_status === 'not paid' ? 'selected' : ''; ?>>Not Paid</option>
+            </select>
+          </div>
           <div class="col-auto d-flex align-items-end gap-2">
             <div class="form-check mb-0" style="padding-top:6px;">
               <input class="form-check-input" type="checkbox" name="filter_all" id="filter_all"
@@ -101,6 +114,8 @@ $result = mysqli_query($conn, $query);
               <th>Date</th>
               <th>Expense Name</th>
               <th>Category</th>
+              <th>Supplier</th>
+              <th>Status</th>
               <th>Qty</th>
               <th>Amount (₹)</th>
               <th>Total (₹)</th>
@@ -115,15 +130,19 @@ $result = mysqli_query($conn, $query);
             while ($row = mysqli_fetch_assoc($result)) {
               $total = $row['expense_amount'] * $row['expense_qty'];
               $grand_total += $total;
+              $supplierName = htmlspecialchars($row['supplier_name'] ?? '');
+              $paymentStatus = htmlspecialchars(ucwords($row['payment_status'] ?? 'paid'));
               echo "<tr>
                 <td>{$count}</td>
-                <td>{$row['expense_date']}</td>
-                <td>{$row['expense_name']}</td>
-                <td>{$row['expense_category']}</td>
-                <td>{$row['expense_qty']}</td>
-                <td>{$row['expense_amount']}</td>
+                <td>" . htmlspecialchars($row['expense_date']) . "</td>
+                <td>" . htmlspecialchars($row['expense_name']) . "</td>
+                <td>" . htmlspecialchars($row['expense_category']) . "</td>
+                <td>{$supplierName}</td>
+                <td>{$paymentStatus}</td>
+                <td>" . htmlspecialchars($row['expense_qty']) . "</td>
+                <td>" . htmlspecialchars($row['expense_amount']) . "</td>
                 <td><strong>" . number_format($total, 2) . "</strong></td>
-                <td>{$row['expense_note']}</td>
+                <td>" . htmlspecialchars($row['expense_note']) . "</td>
                 <td>
                   <a href='shop_listexpense.php?delete_id={$row['id']}' 
                      class='btn btn-danger btn-sm' 
@@ -138,7 +157,7 @@ $result = mysqli_query($conn, $query);
           </tbody>
           <tfoot>
             <tr>
-              <th colspan="6" class="text-end">Grand Total:</th>
+              <th colspan="8" class="text-end">Grand Total:</th>
               <th colspan="3" class="text-start text-success fs-5">₹ <?php echo number_format($grand_total, 2); ?></th>
             </tr>
           </tfoot>
