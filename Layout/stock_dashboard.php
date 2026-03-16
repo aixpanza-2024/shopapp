@@ -172,6 +172,70 @@ while ($e = mysqli_fetch_assoc($hourlyExpRes)) {
 $hourLabels = [];
 foreach ($sessionHours as $hr) $hourLabels[] = date('h A', mktime($hr, 0, 0));
 
+$selectedSessionDate = ((int)date('H', strtotime($start_time)) < 2)
+    ? date('Y-m-d', strtotime('-1 day', strtotime($start_time)))
+    : date('Y-m-d', strtotime($start_time));
+$avgWindowStart = date('Y-m-d', strtotime($selectedSessionDate . ' -6 day'));
+
+$avgHourlyRows = [];
+$avgHourlySessions = [];
+$avgHourlyRes = mysqli_query($conn, "
+    SELECT
+        CASE
+            WHEN TIME(Time) < '02:00:01' THEN DATE_SUB(DATE(Time), INTERVAL 1 DAY)
+            ELSE DATE(Time)
+        END AS session_day,
+        HOUR(Time) AS hr,
+        SUM(quantity) AS items
+    FROM daily_productsale
+    WHERE `payment status` != 'notpaid'
+      AND (
+          CASE
+              WHEN TIME(Time) < '02:00:01' THEN DATE_SUB(DATE(Time), INTERVAL 1 DAY)
+              ELSE DATE(Time)
+          END
+      ) BETWEEN '$avgWindowStart' AND '$selectedSessionDate'
+      AND (TIME(Time) >= '14:00:00' OR TIME(Time) < '02:00:01')
+    GROUP BY session_day, HOUR(Time)
+    ORDER BY session_day, hr
+");
+while ($avgRow = mysqli_fetch_assoc($avgHourlyRes)) {
+    $avgHourlyRows[] = $avgRow;
+    $avgHourlySessions[$avgRow['session_day']] = true;
+}
+
+$avgHourlyItems = array_fill_keys($sessionHours, 0);
+$avgSessionCount = count($avgHourlySessions);
+foreach ($avgHourlyRows as $avgRow) {
+    $hr = (int)$avgRow['hr'];
+    if (isset($avgHourlyItems[$hr])) {
+        $avgHourlyItems[$hr] += (int)$avgRow['items'];
+    }
+}
+if ($avgSessionCount > 0) {
+    foreach ($avgHourlyItems as $hr => $totalItems) {
+        $avgHourlyItems[$hr] = round($totalItems / $avgSessionCount, 2);
+    }
+}
+
+$peakHour = null;
+$peakValue = null;
+$lowHour = null;
+$lowValue = null;
+if ($avgSessionCount > 0) {
+    $peakHour = array_keys($avgHourlyItems, max($avgHourlyItems))[0];
+    $lowHour = array_keys($avgHourlyItems, min($avgHourlyItems))[0];
+    $peakValue = $avgHourlyItems[$peakHour];
+    $lowValue = $avgHourlyItems[$lowHour];
+}
+
+$peakSeries = [];
+$lowSeries = [];
+foreach ($sessionHours as $hr) {
+    $peakSeries[] = ($peakHour !== null && $hr === (int)$peakHour) ? $avgHourlyItems[$hr] : null;
+    $lowSeries[]  = ($lowHour !== null && $hr === (int)$lowHour) ? $avgHourlyItems[$hr] : null;
+}
+
 // ── 5. 7-SESSION TREND ────────────────────────────────────────────────────────
 $trendRows = [];
 for ($i = 6; $i >= 0; $i--) {
@@ -473,6 +537,30 @@ while ($w = mysqli_fetch_assoc($wasteLogRes)) $wasteLog[] = $w;
   </div>
 
   <!-- ── PRODUCT-LEVEL TABLE ── -->
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-header text-white fw-bold d-flex justify-content-between align-items-center" style="background:#b8860b;">
+      <span>Last 7 Days Average Hourly Sales</span>
+      <small>
+        <?php if ($avgSessionCount > 0): ?>
+          Based on <?php echo (int)$avgSessionCount; ?> session<?php echo $avgSessionCount > 1 ? 's' : ''; ?>
+        <?php else: ?>
+          No history available
+        <?php endif; ?>
+      </small>
+    </div>
+    <div class="card-body">
+      <?php if ($avgSessionCount > 0): ?>
+      <div class="d-flex flex-wrap gap-3 mb-3 small text-muted">
+        <span>Peak: <strong class="text-success"><?php echo date('h A', mktime((int)$peakHour, 0, 0)); ?></strong> (avg <?php echo number_format((float)$peakValue, 2); ?> items)</span>
+        <span>Low: <strong class="text-danger"><?php echo date('h A', mktime((int)$lowHour, 0, 0)); ?></strong> (avg <?php echo number_format((float)$lowValue, 2); ?> items)</span>
+      </div>
+      <canvas id="avgHourlyChart" height="120"></canvas>
+      <?php else: ?>
+      <div class="text-muted">Not enough sales history to calculate hourly averages.</div>
+      <?php endif; ?>
+    </div>
+  </div>
+
   <div class="card border-0 shadow-sm rounded-4">
     <div class="card-header text-white fw-bold" style="background:#b8860b;">🧾 Product-Level Sales</div>
     <div class="card-body table-responsive p-0">
@@ -609,6 +697,53 @@ new Chart(document.getElementById('hourlyChart').getContext('2d'), {
     }
   }
 });
+
+<?php if ($avgSessionCount > 0): ?>
+new Chart(document.getElementById('avgHourlyChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: <?php echo json_encode($hourLabels); ?>,
+    datasets: [
+      {
+        label: 'Last 7 Days Avg Items',
+        data: <?php echo json_encode(array_values($avgHourlyItems)); ?>,
+        borderColor: '#0d6efd',
+        backgroundColor: 'rgba(13,110,253,0.12)',
+        fill: true,
+        tension: 0.35,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      },
+      {
+        label: 'Peak Hour',
+        data: <?php echo json_encode($peakSeries); ?>,
+        borderColor: '#198754',
+        backgroundColor: '#198754',
+        pointRadius: 6,
+        pointHoverRadius: 7,
+        showLine: false
+      },
+      {
+        label: 'Low Hour',
+        data: <?php echo json_encode($lowSeries); ?>,
+        borderColor: '#dc3545',
+        backgroundColor: '#dc3545',
+        pointRadius: 6,
+        pointHoverRadius: 7,
+        showLine: false
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      x: { ticks: { maxTicksLimit: 8, font: { size: 10 } } },
+      y: { beginAtZero: true, title: { display: true, text: 'Avg Items Sold' } }
+    }
+  }
+});
+<?php endif; ?>
 
 new Chart(document.getElementById('trendChart').getContext('2d'), {
   type: 'line',
