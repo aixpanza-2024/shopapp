@@ -3,6 +3,11 @@ include("web_shopadmin_header.php");
 date_default_timezone_set('Asia/Kolkata');
 
 // --- Default time range: shop session 2 PM → 2 AM next day ---
+if (!isset($_SESSION['userpermission']) || $_SESSION['userpermission'] !== 'Super Admin') {
+    header('Location: shopadmin.php');
+    exit;
+}
+
 $hour = (int)date('H');
 if ($hour < 2) {
     // Before 2 AM → still in previous day's session
