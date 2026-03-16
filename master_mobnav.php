@@ -4,9 +4,9 @@
   <a href="../Layout/shopadmin.php">Add Products</a>
   <a href="../Layout/shopexpense.php">Add Expense</a>
   <a href="../Layout/shop_listexpense.php">List Expense</a>
+  <a href="../Layout/recent_transactions.php">Recent Transactions</a>
   <?php if (isset($_SESSION['userpermission']) && $_SESSION['userpermission'] === 'Super Admin'): ?>
   <a href="../Layout/daily_sales.php">Daily Sales</a>
-  <a href="../Layout/recent_transactions.php">Recent Transactions</a>
   <a href="../Layout/stock_dashboard.php">Stock Dashboard</a>
   <?php endif; ?>
   <a href="../Adminpanel/index.php">Customer</a>
