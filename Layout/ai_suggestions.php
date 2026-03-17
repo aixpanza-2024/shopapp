@@ -29,7 +29,7 @@ while ($r = mysqli_fetch_assoc($pRes)) $products[] = $r;
 $topSales = [];
 $shopSaleWhere = $shop_id > 0 ? "AND ds.shopid=$shop_id" : "";
 $sRes = mysqli_query($conn, "
-    SELECT ds.`p_id`, ds.`p_name`, SUM(ds.quantity) AS total_qty,
+    SELECT ds.`p_id`, ds.`product name` AS p_name, SUM(ds.quantity) AS total_qty,
            SUM(ds.quantity * ds.`Selling Price`) AS total_revenue
     FROM daily_productsale ds
     WHERE ds.`payment status` != 'notpaid'
