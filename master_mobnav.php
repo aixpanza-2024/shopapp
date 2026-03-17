@@ -9,6 +9,7 @@
   <?php if (isset($_SESSION['userpermission']) && $_SESSION['userpermission'] === 'Super Admin'): ?>
   <a href="../Layout/daily_sales.php">Daily Sales</a>
   <a href="../Layout/stock_dashboard.php">Stock Dashboard</a>
+  <a href="../Layout/ai_suggestions.php">🤖 AI Suggestions</a>
   <?php endif; ?>
   <a href="../Adminpanel/index.php">Customer</a>
   <a href="../Adminpanel/index.php">Expense</a>
