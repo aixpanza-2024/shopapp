@@ -279,8 +279,12 @@ while ($r = mysqli_fetch_assoc($allLoadedRes)) $allLoadedRows[] = $r;
         <img src="../images/logo.jpg" alt="Logo" class="img-fluid" style="max-height:50px;">
         <h6 class="ms-2 text-white mb-0">Daily Sales</h6>
       </div>
-      <div class="d-flex align-items-center">
-        <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#myModal">
+      <div class="d-flex align-items-center gap-2">
+        <a href="ai_daily_summary.php?start_time=<?php echo urlencode(str_replace(' ', 'T', $start_time)); ?>&end_time=<?php echo urlencode(str_replace(' ', 'T', $end_time)); ?>"
+           class="btn btn-sm fw-semibold text-white" style="background:#16213e;">
+          🤖 AI Summary
+        </a>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#myModal">
           <i class="fa fa-language"></i>
         </button>
         <?php include_once("../master_mobnav.php"); ?>

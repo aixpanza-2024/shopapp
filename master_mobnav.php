@@ -10,6 +10,7 @@
   <a href="../Layout/daily_sales.php">Daily Sales</a>
   <a href="../Layout/stock_dashboard.php">Stock Dashboard</a>
   <a href="../Layout/ai_suggestions.php">🤖 AI Suggestions</a>
+  <a href="../Layout/ai_daily_summary.php">📊 AI Daily Summary</a>
   <?php endif; ?>
   <a href="../Adminpanel/index.php">Customer</a>
   <a href="../Adminpanel/index.php">Expense</a>
