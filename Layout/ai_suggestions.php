@@ -35,7 +35,7 @@ $sRes = mysqli_query($conn, "
     WHERE ds.`payment status` != 'notpaid'
       AND ds.Time >= '$month_ago'
       $shopSaleWhere
-    GROUP BY ds.`p_id`, ds.`p_name`
+    GROUP BY ds.`p_id`, ds.`product name`
     ORDER BY total_qty DESC
     LIMIT 10
 ");
