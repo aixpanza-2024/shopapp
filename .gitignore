@@ -4,6 +4,9 @@ db.php
 # Weather API config (contains API key)
 weather_config.php
 
+# AI config (contains OpenAI API key)
+ai_config.php
+
 # PHP sessions
 sessions/
 
