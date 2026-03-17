@@ -27,6 +27,22 @@ $conn->query("CREATE TABLE IF NOT EXISTS weather_log (
     INDEX idx_recorded_at (recorded_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+// Migrate: add new columns if table already existed with old schema
+$_wlCols = [];
+$_wlRes = $conn->query("SHOW COLUMNS FROM weather_log");
+while ($_wlCol = $_wlRes->fetch_assoc()) $_wlCols[] = $_wlCol['Field'];
+$_wlMigrations = [
+    'feels_like'   => "ALTER TABLE weather_log ADD COLUMN feels_like  DECIMAL(5,2) DEFAULT NULL AFTER temperature",
+    'temp_min'     => "ALTER TABLE weather_log ADD COLUMN temp_min    DECIMAL(5,2) DEFAULT NULL AFTER feels_like",
+    'temp_max'     => "ALTER TABLE weather_log ADD COLUMN temp_max    DECIMAL(5,2) DEFAULT NULL AFTER temp_min",
+    'weather_icon' => "ALTER TABLE weather_log ADD COLUMN weather_icon VARCHAR(20)  DEFAULT NULL AFTER weather_type",
+    'source'       => "ALTER TABLE weather_log ADD COLUMN source ENUM('api','manual') NOT NULL DEFAULT 'api' AFTER recorded_at",
+];
+foreach ($_wlMigrations as $_wlCol => $_wlSql) {
+    if (!in_array($_wlCol, $_wlCols)) $conn->query($_wlSql);
+}
+unset($_wlCols, $_wlRes, $_wlCol, $_wlMigrations, $_wlSql);
+
 // Fetch input
 
 if(isset($_POST['product_id']))

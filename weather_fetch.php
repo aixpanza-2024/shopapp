@@ -35,6 +35,22 @@ $conn->query("CREATE TABLE IF NOT EXISTS weather_log (
     INDEX idx_recorded_at (recorded_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+// ── Migrate: add new columns if the table already existed with old schema ─────
+$existingCols = [];
+$colRes = $conn->query("SHOW COLUMNS FROM weather_log");
+while ($col = $colRes->fetch_assoc()) $existingCols[] = $col['Field'];
+
+$migrations = [
+    'feels_like'   => "ALTER TABLE weather_log ADD COLUMN feels_like  DECIMAL(5,2) DEFAULT NULL AFTER temperature",
+    'temp_min'     => "ALTER TABLE weather_log ADD COLUMN temp_min    DECIMAL(5,2) DEFAULT NULL AFTER feels_like",
+    'temp_max'     => "ALTER TABLE weather_log ADD COLUMN temp_max    DECIMAL(5,2) DEFAULT NULL AFTER temp_min",
+    'weather_icon' => "ALTER TABLE weather_log ADD COLUMN weather_icon VARCHAR(20)  DEFAULT NULL AFTER weather_type",
+    'source'       => "ALTER TABLE weather_log ADD COLUMN source ENUM('api','manual') NOT NULL DEFAULT 'api' AFTER recorded_at",
+];
+foreach ($migrations as $col => $sql) {
+    if (!in_array($col, $existingCols)) $conn->query($sql);
+}
+
 // ── 2. Check if a recent record already exists (within the fetch interval) ────
 $interval_minutes = (int)(WEATHER_FETCH_INTERVAL / 60);
 $recent = $conn->query(
