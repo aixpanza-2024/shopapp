@@ -115,53 +115,7 @@ foreach ($ingredientMap as $im) {
 $allIngredients = array_unique(array_merge($rawMaterials, $masterNames));
 sort($allIngredients);
 
-$prompt = <<<PROMPT
-You are a food business consultant for a South Indian hotel/snack shop. Analyze this shop's data and suggest the most profitable new snacks/dishes to introduce.
-
-**SHOP CONTEXT**
-- Location: {$location}
-- Date: {$now}, Season: {$season} ({$month_name})
-- Current weather: {$temp}, Humidity: {$humidity}, Condition: {$weather_d}
-- Peak billing hours: {$peakHoursStr}
-- Monthly raw material spend: ₹{$expRow['total']}
-
-**CURRENT MENU WITH PROFITABILITY**
-{$productBlock}
-
-**TOP SELLING ITEMS (last 30 days)**
-{$topSalesBlock}
-
-**INGREDIENTS MAPPED TO PRODUCTS**
-{$ingBlock}
-
-**INGREDIENTS/RAW MATERIALS AVAILABLE IN SHOP**
-{$ingredientsBlock}
-
----
-
-Based on this data, provide:
-
-## 1. Top 5 New Snacks/Dishes to Introduce
-For each, provide:
-- **Dish name** and brief description
-- Why it fits this location/weather/season
-- Which available ingredients can be reused
-- Estimated selling price and rough profit margin
-- Current trend relevance (Kerala/South India or national)
-
-## 2. Quick Wins (dishes using only ingredients already available)
-List 3 dishes that can be made *immediately* with zero new purchases.
-
-## 3. High-Margin Opportunity
-One premium dish or combo that could justify a higher price point for the current customer base.
-
-## 4. Seasonal/Weather Tip
-1-2 specific suggestions based on today's weather ({$weather_d}, {$temp}, humidity {$humidity}).
-
-Keep suggestions practical for a South Indian hotel. Be specific about ingredients and pricing in Indian Rupees.
-PROMPT;
-
-// Replace placeholders properly
+// Build prompt blocks
 $peakHoursStr  = !empty($peakHours) ? implode(', ', $peakHours) : 'Not enough data';
 $productBlock  = !empty($productLines) ? implode("\n", $productLines) : 'No products found';
 $topSalesBlock = !empty($topSaleLines) ? implode("\n", $topSaleLines) : 'No sales data yet';
@@ -256,9 +210,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'gener
     }
 }
 
-// Load past suggestions
+// Ensure table exists then load past suggestions
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS ai_suggestion_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    shop_id INT NOT NULL DEFAULT 0,
+    suggestion TEXT NOT NULL,
+    prompt_summary VARCHAR(500) DEFAULT NULL,
+    generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+)");
 $history = [];
-$hRes = mysqli_query($conn, "SELECT * FROM ai_suggestion_log WHERE shop_id=$shop_id ORDER BY generated_at DESC LIMIT 5") ;
+$hRes = mysqli_query($conn, "SELECT * FROM ai_suggestion_log WHERE shop_id=$shop_id ORDER BY generated_at DESC LIMIT 5");
 if ($hRes) while ($r = mysqli_fetch_assoc($hRes)) $history[] = $r;
 ?>
 
