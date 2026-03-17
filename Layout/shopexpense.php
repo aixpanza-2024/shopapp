@@ -188,9 +188,9 @@ foreach ($defaultNames as $dn) {
 
 // Past expense names for autocomplete: master list + any used names not yet in master
 $pastNamesRes = mysqli_query($conn, "
-    SELECT name FROM expense_names_master
+    SELECT CONVERT(name USING utf8mb4) COLLATE utf8mb4_general_ci AS name FROM expense_names_master
     UNION
-    SELECT DISTINCT expense_name FROM shop_expenses WHERE is_deleted=0
+    SELECT DISTINCT CONVERT(expense_name USING utf8mb4) COLLATE utf8mb4_general_ci FROM shop_expenses WHERE is_deleted=0
     ORDER BY name
 ");
 $pastNames = [];
