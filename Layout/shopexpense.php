@@ -121,10 +121,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 'ex
 // Session opening balance
 $ob_row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM shop_daily_opening WHERE opening_date='$report_session_date'"));
 
-// Past expense names for autocomplete (from DB)
-$pastNamesRes = mysqli_query($conn, "SELECT DISTINCT expense_name FROM shop_expenses WHERE is_deleted=0 ORDER BY expense_name");
+// Ensure master expense names table exists
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS expense_names_master (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    UNIQUE KEY unique_name (name)
+)");
+// Seed hardcoded defaults into master table (only inserts if not already present)
+$defaultNames = [
+    // Operations & Utilities
+    'Gas Cylinder','Electricity Bill','Rent','Water','Auto','Miscellaneous',
+    'Staff Salary','Cleaning Items','Paper Cups','Soda','Ice Purchase',
+
+    // Flours & Grains
+    'Wheat Flour','Maida','Rice Flour','Rava','Besan','Corn Flour','Ragi Flour',
+    'Rice','Basmati Rice','Poha','Vermicelli','Bread','Bun','Noodles','Pasta',
+
+    // Oils & Fats
+    'Coconut Oil','Sunflower Oil','Palm Oil','Groundnut Oil','Sesame Oil',
+    'Mustard Oil','Refined Oil','Ghee','Butter','Margarine','Vanaspati',
+
+    // Dairy
+    'Milk','Curd','Paneer','Cream','Khoya','Condensed Milk','Cheese','Eggs',
+
+    // Spices & Masalas
+    'Salt','Turmeric','Red Chilli Powder','Coriander Powder','Cumin Seeds',
+    'Mustard Seeds','Black Pepper','Cardamom','Cloves','Cinnamon','Bay Leaves',
+    'Fenugreek Seeds','Asafoetida','Garam Masala','Sambar Powder','Rasam Powder',
+    'Biryani Masala','Chicken Masala','Fennel Seeds','Cumin Powder','Pepper Powder',
+
+    // Pulses & Lentils
+    'Toor Dal','Chana Dal','Moong Dal','Urad Dal','Masoor Dal',
+    'Rajma','Chana','Green Gram','Black Eyed Peas',
+
+    // Meat & Seafood
+    'Chicken','Mutton','Fish','Prawns','Beef','Pork',
+
+    // Sauces & Condiments
+    'Tamarind','Jaggery','Sugar','Vinegar','Soy Sauce','Tomato Sauce',
+    'Chilli Sauce','Baking Powder','Baking Soda','Yeast','Vanilla Essence',
+    'Food Colour','Coconut Milk','Coconut Cream',
+
+    // Beverages & Dry
+    'Tea Powder','Coffee Powder','Cocoa Powder','Horlicks','Boost',
+
+    // Vegetables
+    'Tomato','Onion','Potato','Capsicum','Cabbage','Cauliflower','Carrot',
+    'Beans','Green Chilli','Coriander Leaves','Curry Leaves','Ginger','Garlic',
+    'Beetroot','Spinach','Drumstick','Ladies Finger','Cucumber','Bottle Gourd',
+    'Pumpkin','Brinjal','Bitter Gourd','Ridge Gourd','Snake Gourd','Ash Gourd',
+    'Raw Banana','Raw Papaya','Yam','Colocasia','Sweet Potato','Spring Onion',
+    'Celery','Leek','Mushroom','Baby Corn','Broccoli',
+
+    // Fruits
+    'Pineapple','Banana','Apple','Orange','Watermelon','Papaya','Mango',
+    'Lemon','Grapes','Pomegranate','Coconut','Tender Coconut','Guava',
+    'Sapota','Jackfruit','Dates','Dry Grapes',
+
+    // Snacks & Bakery
+    'Snacks Purchase','Biscuits','Bread Crumbs','Vermicelli','Macaroni',
+];
+foreach ($defaultNames as $dn) {
+    $esc = mysqli_real_escape_string($conn, $dn);
+    mysqli_query($conn, "INSERT IGNORE INTO expense_names_master (name) VALUES ('$esc')");
+}
+
+// Past expense names for autocomplete: master list + any used names not yet in master
+$pastNamesRes = mysqli_query($conn, "
+    SELECT name FROM expense_names_master
+    UNION
+    SELECT DISTINCT expense_name FROM shop_expenses WHERE is_deleted=0
+    ORDER BY name
+");
 $pastNames = [];
-while ($r = mysqli_fetch_assoc($pastNamesRes)) $pastNames[] = $r['expense_name'];
+while ($r = mysqli_fetch_assoc($pastNamesRes)) $pastNames[] = $r['name'];
 
 $supplierRows = [];
 $shopId = intval($_SESSION['selectshop'] ?? 0);
@@ -457,18 +527,7 @@ if (isset($_GET['delete_saving'])) {
 
 <script>
 (function () {
-  const HARDCODED = [
-    'Milk','Tea Powder','Sugar','Gas Cylinder','Snacks Purchase','Cleaning Items',
-    'Staff Salary','Electricity Bill','Rent','Water','Soda','Ice Purchase',
-    'Bread','Bun','Paper Cups','Auto','Miscellaneous',
-    'Tomato','Onion','Potato','Capsicum','Cabbage','Cauliflower','Carrot',
-    'Beans','Green Chilli','Coriander Leaves','Curry Leaves','Ginger','Garlic',
-    'Beetroot','Spinach','Drumstick','Ladies Finger','Cucumber','Bottle Gourd','Pumpkin',
-    'Pineapple','Banana','Apple','Orange','Watermelon','Papaya','Mango',
-    'Lemon','Grapes','Pomegranate','Coconut','Tender Coconut'
-  ];
-  const DB_NAMES  = <?php echo json_encode($pastNames); ?>;
-  const ALL_OPTIONS = [...new Set([...HARDCODED, ...DB_NAMES])].sort();
+  const ALL_OPTIONS = <?php echo json_encode($pastNames); ?>;
 
   const input    = document.getElementById('expense_name');
   const dropdown = document.getElementById('expense_dropdown');
@@ -489,12 +548,13 @@ if (isset($_GET['delete_saving'])) {
   function renderDropdown(q) {
     dropdown.innerHTML = '';
     activeIdx = -1;
-    if (!q) { dropdown.style.display = 'none'; return; }
 
-    const matches = ALL_OPTIONS.filter(o => o.toLowerCase().includes(q.toLowerCase()));
+    const matches = q
+      ? ALL_OPTIONS.filter(o => o.toLowerCase().includes(q.toLowerCase()))
+      : ALL_OPTIONS;
     if (matches.length === 0) { dropdown.style.display = 'none'; return; }
 
-    matches.slice(0, 30).forEach((m, i) => {
+    matches.slice(0, 50).forEach((m, i) => {
       const div = document.createElement('div');
       div.className = 'exp-option';
       div.dataset.idx = i;
@@ -509,6 +569,7 @@ if (isset($_GET['delete_saving'])) {
     dropdown.style.display = 'block';
   }
 
+  input.addEventListener('focus', () => renderDropdown(input.value.trim()));
   input.addEventListener('input', () => renderDropdown(input.value.trim()));
   input.addEventListener('keyup', e => {
     if (['ArrowDown','ArrowUp','Enter','Escape'].includes(e.key)) return;
