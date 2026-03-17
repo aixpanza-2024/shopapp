@@ -1,6 +1,12 @@
 # DB credentials
 db.php
 
+# Weather API config (contains API key)
+weather_config.php
+
+# PHP sessions
+sessions/
+
 # Claude session data
 .claude/
 

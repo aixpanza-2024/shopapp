@@ -7,6 +7,26 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 include_once('db.php');
+include_once(__DIR__ . '/weather_config.php');
+
+// Ensure weather_log table exists (safe to run on every request — no-op if already exists)
+$conn->query("CREATE TABLE IF NOT EXISTS weather_log (
+    w_id         INT AUTO_INCREMENT PRIMARY KEY,
+    temperature  DECIMAL(5,2)   NOT NULL,
+    feels_like   DECIMAL(5,2)   DEFAULT NULL,
+    temp_min     DECIMAL(5,2)   DEFAULT NULL,
+    temp_max     DECIMAL(5,2)   DEFAULT NULL,
+    humidity     INT            NOT NULL,
+    pressure     INT            NOT NULL,
+    weather_type VARCHAR(100)   NOT NULL,
+    weather_icon VARCHAR(20)    DEFAULT NULL,
+    wind_speed   DECIMAL(6,2)   DEFAULT NULL,
+    location     VARCHAR(100)   NOT NULL,
+    recorded_at  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    source       ENUM('api','manual') NOT NULL DEFAULT 'api',
+    INDEX idx_recorded_at (recorded_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 // Fetch input
 
 if(isset($_POST['product_id']))
@@ -54,23 +74,31 @@ if ($rcentidof = $result->fetch_assoc()) {
 
 $dpp_id = $recentid ?? 0; // 0 for products with no daily_availability record (e.g. Tea)
 
-//fetching the weather result
-$weatherid = 0; // default if weather_log is empty
-$stmtwthr = $conn->prepare("SELECT w_id, temperature, humidity, pressure, weather_type, wind_speed, location, recorded_at FROM weather_log ORDER BY w_id DESC limit 1");
+// ── Weather: auto-fetch if last record is older than WEATHER_FETCH_INTERVAL ──
+$weatherid = 0;
+$interval_minutes = (int)(WEATHER_FETCH_INTERVAL / 60);
 
-// Execute the statement
+$stmtwthr = $conn->prepare(
+    "SELECT w_id, recorded_at FROM weather_log ORDER BY w_id DESC LIMIT 1"
+);
 $stmtwthr->execute();
-
-// Bind result variables
-$stmtwthr->bind_result($w_id, $temperature, $humidity, $pressure, $weather_type, $wind_speed, $location, $recorded_at);
-
-// Fetch results
-while ($stmtwthr->fetch()) {
-$weatherid=$w_id;// Default weather value (replace with actual API value later)
+$stmtwthr->bind_result($_wid, $_recorded_at);
+$has_recent = false;
+if ($stmtwthr->fetch()) {
+    $weatherid   = $_wid;
+    $age_minutes = (time() - strtotime($_recorded_at)) / 60;
+    $has_recent  = ($age_minutes <= $interval_minutes);
 }
-
-// Close statement and connection
 $stmtwthr->close();
+
+// Trigger a fresh fetch if no record exists or data is stale (>4 hours old)
+if (!$has_recent) {
+    define('WEATHER_CALLED_INTERNALLY', true);
+    $weather_result = include_once(__DIR__ . '/weather_fetch.php');
+    if (is_array($weather_result) && !empty($weather_result['w_id'])) {
+        $weatherid = (int)$weather_result['w_id'];
+    }
+}
 
 
 
