@@ -2,6 +2,30 @@
 include("web_shopadmin_header.php");
 date_default_timezone_set('Asia/Kolkata');
 
+// Handle wastage form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'mark_wastage') {
+    $w_product_id = (int)$_POST['product_id'];
+    $w_prod_name  = trim($_POST['prod_name']);
+    $w_qty        = (int)$_POST['wastage_qty'];
+    $w_reason     = in_array($_POST['reason'], ['unsold','damaged','other']) ? $_POST['reason'] : 'unsold';
+    $w_notes      = trim($_POST['notes'] ?? '');
+    $w_date       = trim($_POST['wastage_date']);
+
+    if ($w_product_id > 0 && $w_qty > 0 && $w_date !== '') {
+        $ins = $conn->prepare("INSERT INTO daily_wastage (product_id, prod_name, wastage_qty, reason, notes, wastage_date, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+        $ins->bind_param("isisss", $w_product_id, $w_prod_name, $w_qty, $w_reason, $w_notes, $w_date);
+        $ins->execute();
+        $ins->close();
+    }
+    // Redirect to same page to avoid re-submit
+    $redirect = 'recent_transactions.php';
+    if (!empty($_POST['redirect_qs'])) {
+        $redirect .= '?' . $_POST['redirect_qs'];
+    }
+    header("Location: $redirect");
+    exit;
+}
+
 // Default shop session: 2 PM to 2 AM next day
 $hour = (int)date('H');
 if ($hour < 2) {
@@ -119,6 +143,7 @@ $loadedRes = $loadedStmt->get_result();
 $allLoadedRows = [];
 $leftoverStock = 0;
 while ($row = $loadedRes->fetch_assoc()) {
+    if ((int)$row['loaded'] <= 0) continue;  // skip items with no loaded stock
     $row['remaining'] = max(0, (int)$row['loaded'] - (int)$row['sold'] - (int)$row['wasted']);
     $leftoverStock += $row['remaining'];
     $allLoadedRows[] = $row;
@@ -142,6 +167,12 @@ $transactionStmt = $conn->prepare($transactionSQL);
 $transactionStmt->bind_param("ss", $start_time, $end_time);
 $transactionStmt->execute();
 $transactionResult = $transactionStmt->get_result();
+$transactions = [];
+$tableTotal = 0;
+while ($row = $transactionResult->fetch_assoc()) {
+    $tableTotal += floatval($row['total_amount']);
+    $transactions[] = $row;
+}
 $transactionStmt->close();
 ?>
 
@@ -218,7 +249,7 @@ $transactionStmt->close();
     <div class="card shadow-sm border-0 rounded-4 mb-3">
       <div class="card-header text-white d-flex justify-content-between align-items-center" style="background:#b8860b;">
         <strong>Last 5 Cash / UPI Transactions</strong>
-        <span>₹<?php echo number_format($summary['total_amount'] ?? 0, 2); ?></span>
+        <span>₹<?php echo number_format($tableTotal, 2); ?></span>
       </div>
       <div class="card-body table-responsive p-0">
         <table class="table table-striped table-bordered align-middle text-center mb-0">
@@ -232,10 +263,10 @@ $transactionStmt->close();
             </tr>
           </thead>
           <tbody>
-            <?php if ($transactionResult->num_rows === 0): ?>
+            <?php if (empty($transactions)): ?>
             <tr><td colspan="5" class="text-center text-muted py-3">No transactions found for this period.</td></tr>
             <?php else: ?>
-            <?php while ($txn = $transactionResult->fetch_assoc()): ?>
+            <?php foreach ($transactions as $txn): ?>
             <tr>
               <td><?php echo date('d M h:i A', strtotime($txn['txn_time'])); ?></td>
               <td><?php echo htmlspecialchars($txn['inv_no']); ?></td>
@@ -249,7 +280,7 @@ $transactionStmt->close();
               <td><?php echo (int)$txn['total_items']; ?></td>
               <td>₹<?php echo number_format($txn['total_amount'], 2); ?></td>
             </tr>
-            <?php endwhile; ?>
+            <?php endforeach; ?>
             <?php endif; ?>
           </tbody>
         </table>
@@ -266,11 +297,11 @@ $transactionStmt->close();
           <thead class="table-dark">
             <tr>
               <th>Item</th>
-              <th>Category</th>
               <th>Loaded</th>
               <th>Sold</th>
               <th>Wasted</th>
               <th>Left</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -279,12 +310,17 @@ $transactionStmt->close();
             <?php else: ?>
             <?php foreach ($allLoadedRows as $row): ?>
             <tr>
-              <td><?php echo htmlspecialchars($row['name']); ?></td>
-              <td><?php echo htmlspecialchars($row['cat_name']); ?></td>
+              <td class="text-start"><?php echo htmlspecialchars($row['name']); ?></td>
               <td><?php echo (int)$row['loaded']; ?></td>
               <td class="text-success fw-semibold"><?php echo (int)$row['sold']; ?></td>
               <td class="text-danger fw-semibold"><?php echo (int)$row['wasted']; ?></td>
               <td class="fw-bold"><?php echo (int)$row['remaining']; ?></td>
+              <td>
+                <button class="btn btn-sm btn-outline-danger px-2 py-0"
+                  onclick="openWastage(<?php echo (int)$row['p_id']; ?>, '<?php echo addslashes($row['name']); ?>', <?php echo (int)$row['remaining']; ?>)">
+                  <i class="fa fa-trash-o"></i>
+                </button>
+              </td>
             </tr>
             <?php endforeach; ?>
             <?php endif; ?>
@@ -294,6 +330,64 @@ $transactionStmt->close();
     </div>
   </div>
 </main>
+
+<!-- Wastage Modal -->
+<div class="modal fade" id="wastageModal" tabindex="-1" aria-labelledby="wastageModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header text-white" style="background:#b8860b;">
+        <h6 class="modal-title" id="wastageModalLabel"><i class="fa fa-trash-o me-2"></i>Mark Wastage</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="recent_transactions.php">
+        <input type="hidden" name="action" value="mark_wastage">
+        <input type="hidden" name="product_id" id="w_product_id">
+        <input type="hidden" name="prod_name" id="w_prod_name_hidden">
+        <input type="hidden" name="wastage_date" value="<?php echo htmlspecialchars($session_date); ?>">
+        <input type="hidden" name="redirect_qs" value="<?php echo htmlspecialchars(http_build_query(array_filter(['start_time' => $_GET['start_time'] ?? '', 'end_time' => $_GET['end_time'] ?? '']))); ?>">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Product</label>
+            <input type="text" class="form-control" id="w_prod_name_display" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Wastage Qty <span class="text-muted small" id="w_max_label"></span></label>
+            <input type="number" name="wastage_qty" id="w_qty" class="form-control" min="1" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Reason</label>
+            <select name="reason" class="form-select">
+              <option value="unsold">Unsold / Expired</option>
+              <option value="damaged">Damaged</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="mb-1">
+            <label class="form-label fw-semibold">Notes <span class="text-muted small">(optional)</span></label>
+            <textarea name="notes" class="form-control" rows="2" maxlength="500"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">Record Wastage</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openWastage(pid, name, remaining) {
+  document.getElementById('w_product_id').value = pid;
+  document.getElementById('w_prod_name_hidden').value = name;
+  document.getElementById('w_prod_name_display').value = name;
+  document.getElementById('w_qty').value = remaining > 0 ? remaining : 1;
+  document.getElementById('w_qty').max = remaining > 0 ? remaining : 9999;
+  document.getElementById('w_max_label').textContent = remaining > 0 ? '(max ' + remaining + ')' : '';
+  var modal = new bootstrap.Modal(document.getElementById('wastageModal'));
+  modal.show();
+}
+</script>
 
 <?php include_once("web_shopadmin_footer.php"); ?>
 

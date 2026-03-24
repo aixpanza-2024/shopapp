@@ -24,7 +24,7 @@ $start_time = str_replace('T', ' ', $start_time);
 $end_time   = str_replace('T', ' ', $end_time);
 $session_label = date('d M Y', strtotime($start_time)) . ' (2 PM → 2 AM)';
 
-$shopWhere = $shop_id > 0 ? "AND ds.shopid=$shop_id" : "";
+$shopWhere = ""; // daily_productsale has no shopid column
 $esc_start = mysqli_real_escape_string($conn, $start_time);
 $esc_end   = mysqli_real_escape_string($conn, $end_time);
 
