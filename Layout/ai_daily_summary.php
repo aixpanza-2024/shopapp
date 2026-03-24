@@ -31,13 +31,15 @@ $esc_end   = mysqli_real_escape_string($conn, $end_time);
 // ── 1. Session totals (paid only) ─────────────────────────────────────────
 $totals = mysqli_fetch_assoc(mysqli_query($conn, "
     SELECT COUNT(DISTINCT `Inv no`) AS total_bills,
-           SUM(quantity) AS total_items,
-           SUM(quantity * `Selling Price`) AS total_revenue,
+           SUM(total_items) AS total_items,
+           SUM(bill_total) AS total_revenue,
            AVG(bill_total) AS avg_bill,
            MIN(bill_total) AS min_bill,
            MAX(bill_total) AS max_bill
     FROM (
-        SELECT `Inv no`, SUM(quantity * `Selling Price`) AS bill_total
+        SELECT `Inv no`,
+               SUM(quantity) AS total_items,
+               SUM(quantity * `Selling Price`) AS bill_total
         FROM daily_productsale ds
         WHERE `payment status` != 'notpaid'
           AND ds.Time >= '$esc_start' AND ds.Time <= '$esc_end'
@@ -108,7 +110,7 @@ $notpaid = mysqli_fetch_assoc(mysqli_query($conn, "
     WHERE `payment status` = 'notpaid'
       AND ds.Time >= '$esc_start' AND ds.Time <= '$esc_end'
       $shopWhere
-"));
+")) ?? ['cnt' => 0, 'amount' => 0];
 
 // 5b. Staff payment bills
 $staffPay = mysqli_fetch_assoc(mysqli_query($conn, "
@@ -118,7 +120,7 @@ $staffPay = mysqli_fetch_assoc(mysqli_query($conn, "
     WHERE `Payment Mode` LIKE 'staff%'
       AND ds.Time >= '$esc_start' AND ds.Time <= '$esc_end'
       $shopWhere
-"));
+")) ?? ['cnt' => 0, 'amount' => 0];
 
 // 5c. Very low amount bills (< ₹20 — possible partial/voided entry)
 $lowBillThreshold = 20;
@@ -147,7 +149,7 @@ $singleItemBills = mysqli_fetch_assoc(mysqli_query($conn, "
         GROUP BY `Inv no`
         HAVING COUNT(DISTINCT `product name`) = 1
     ) t
-"));
+")) ?? ['cnt' => 0];
 
 // 5e. Invoice number gaps (deleted bills) — detect jumps > 1
 $invNums = [];
